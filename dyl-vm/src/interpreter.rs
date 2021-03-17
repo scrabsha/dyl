@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use dyl_bytecode::Instruction;
 
 use crate::value::Value;
@@ -38,8 +36,8 @@ impl Interpreter {
     }
 
     fn run_add_i(&mut self) {
-        let lhs = self.pop_stack().unwrap().try_into_integer().unwrap();
-        let rhs = self.pop_stack().unwrap().try_into_integer().unwrap();
+        let lhs = self.stack.pop().unwrap().try_into_integer().unwrap();
+        let rhs = self.stack.pop().unwrap().try_into_integer().unwrap();
 
         let rslt = Value::Integer(lhs + rhs);
         self.stack.push(rslt);
@@ -51,12 +49,12 @@ impl Interpreter {
     }
 
     fn run_full_stop(&mut self) {
-        let v = self.pop_stack().unwrap();
-        println!("Final value: {:?}", v);
         self.ip = usize::MAX;
-    }
 
-    fn pop_stack(&mut self) -> Option<Value> {
-        self.stack.pop()
+        match self.stack.as_slice() {
+            [] => {},
+            [f] => println!("Final value: {:?}", f),
+            _ => println!("Process stopped with an incompatible stack size"),
+        }
     }
 }

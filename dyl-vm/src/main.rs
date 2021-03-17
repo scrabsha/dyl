@@ -4,6 +4,19 @@ mod interpreter;
 mod value;
 
 fn main() {
-    let ops = vec![0, 0, 0, 0, 41, 0, 0, 0, 0, 1, 1, 2];
+    let ops = vec![
+        // pushi 40
+        0, 0, 0, 0, 40,
+        // pushi 1
+        0, 0, 0, 0, 1,
+        // pushi 1
+        0, 0, 0, 0, 1,
+        // addi
+        1,
+        // addi
+        1,
+        // fstop
+        2
+    ];
     Interpreter::from_bytecode(ops).run();
 }

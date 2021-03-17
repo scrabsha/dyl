@@ -1,3 +1,4 @@
+use dyl_bytecode::display::disassemble;
 use interpreter::Interpreter;
 
 mod interpreter;
@@ -18,5 +19,7 @@ fn main() {
         // fstop
         2
     ];
+
+    disassemble(ops.as_slice()).unwrap();
     Interpreter::from_bytecode(ops).run();
 }

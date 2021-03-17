@@ -1,4 +1,5 @@
 pub mod decode;
+pub mod display;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Instruction {

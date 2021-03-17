@@ -6,7 +6,8 @@ impl Instruction {
 
         match op {
             0 => Instruction::decode_push_i(input),
-            1 => Ok((Instruction::AddI, input)),
+            1 => Ok(((Instruction::AddI, 1), input)),
+            2 => Ok(((Instruction::FullStop, 1), input)),
             op => Err(DecodingError::UnknownOpcode(op)),
         }
     }
@@ -15,7 +16,7 @@ impl Instruction {
         let (val, input) = Instruction::pump_four(input)?;
         let instr = Instruction::PushI(val as i32);
 
-        Ok((instr, input))
+        Ok(((instr, 5), input))
     }
 
     fn pump_one(input: InputStream) -> TmpDecodingResult<u8> {
@@ -38,7 +39,7 @@ impl Instruction {
 
 pub type InputStream<'a> = &'a [u8];
 
-pub type DecodingResult<'a> = TmpDecodingResult<'a, Instruction>;
+pub type DecodingResult<'a> = TmpDecodingResult<'a, (Instruction, usize)>;
 
 pub type TmpDecodingResult<'a, T> = Result<(T, InputStream<'a>), DecodingError>;
 

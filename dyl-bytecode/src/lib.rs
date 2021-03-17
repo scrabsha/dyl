@@ -4,4 +4,5 @@ pub mod decode;
 pub enum Instruction {
     PushI(i32),
     AddI,
+    FullStop,
 }

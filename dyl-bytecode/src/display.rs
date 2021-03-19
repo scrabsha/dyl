@@ -8,20 +8,23 @@ impl Display for Instruction {
             Instruction::PushI(val) => write!(f, "push_i {}", val),
             Instruction::AddI => write!(f, "add_i"),
             Instruction::FullStop => write!(f, "f_stop"),
+            Instruction::PushC(chr) => write!(f, "push_c {}", chr),
         }
     }
 }
 
 pub fn disassemble(mut bytecode: &[u8]) -> Result<(), DecodingError> {
     let mut instrs = Vec::new();
+    let mut idx = 0;
     while !bytecode.is_empty() {
-        let ((instr, _), tail) = Instruction::decode(bytecode)?;
+        let ((instr, len), tail) = Instruction::decode(bytecode)?;
         bytecode = tail;
-        instrs.push(instr);
+        instrs.push((idx,instr));
+        idx += len;
     }
 
-    for instr in instrs {
-        println!("{}", instr);
+    for (pos, instr) in instrs {
+        println!("{:#06x}: {}", pos, instr);
     }
 
     Ok(())

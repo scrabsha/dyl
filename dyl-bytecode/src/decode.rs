@@ -8,6 +8,7 @@ impl Instruction {
             0 => Instruction::decode_push_i(input),
             1 => Ok(((Instruction::AddI, 1), input)),
             2 => Ok(((Instruction::FullStop, 1), input)),
+            3 => Instruction::decode_push_c(input),
             op => Err(DecodingError::UnknownOpcode(op)),
         }
     }
@@ -15,6 +16,14 @@ impl Instruction {
     fn decode_push_i(input: InputStream) -> DecodingResult {
         let (val, input) = Instruction::pump_four(input)?;
         let instr = Instruction::PushI(val as i32);
+
+        Ok(((instr, 5), input))
+    }
+
+    fn decode_push_c(input: InputStream) -> DecodingResult {
+        let (val, input) = Instruction::pump_four(input)?;
+        let chr = std::char::from_u32(val).unwrap();
+        let instr = Instruction::PushC(chr);
 
         Ok(((instr, 5), input))
     }

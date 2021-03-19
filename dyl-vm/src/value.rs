@@ -1,6 +1,7 @@
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Value {
     Integer(i32),
+    Char(char),
 }
 
 impl Value {

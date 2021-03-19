@@ -32,6 +32,7 @@ impl Interpreter {
             Instruction::AddI => self.run_add_i(),
             Instruction::PushI(val) => self.run_push_i(val),
             Instruction::FullStop => self.run_full_stop(),
+            Instruction::PushC(chr) => self.run_push_c(chr),
         }
     }
 
@@ -56,5 +57,10 @@ impl Interpreter {
             [f] => println!("Final value: {:?}", f),
             _ => println!("Process stopped with an incompatible stack size"),
         }
+    }
+
+    fn run_push_c(&mut self, chr: char) {
+        let value = Value::Char(chr);
+        self.stack.push(value);
     }
 }

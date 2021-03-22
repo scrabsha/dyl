@@ -3,14 +3,14 @@ use dyl_bytecode::Instruction;
 use crate::value::Value;
 
 pub(crate) struct Interpreter {
-    stack: Vec<Value>,
+    stack: Stack,
     code: Vec<u8>,
     ip: usize,
 }
 
 impl Interpreter {
     pub(crate) fn from_bytecode(code: Vec<u8>) -> Interpreter {
-        let stack = Vec::new();
+        let stack = Stack::new();
         let ip = 0;
 
         Interpreter { stack, ip, code }
@@ -37,30 +37,79 @@ impl Interpreter {
     }
 
     fn run_add_i(&mut self) {
-        let lhs = self.stack.pop().unwrap().try_into_integer().unwrap();
-        let rhs = self.stack.pop().unwrap().try_into_integer().unwrap();
+        let lhs = self.stack.pop_integer().unwrap();
+        let rhs = self.stack.pop_integer().unwrap();
 
-        let rslt = Value::Integer(lhs + rhs);
-        self.stack.push(rslt);
+        let sum = lhs + rhs;
+        self.stack.push_integer(sum);
     }
 
-    fn run_push_i(&mut self, val: i32) {
-        let i = Value::Integer(val);
-        self.stack.push(i);
+    fn run_push_i(&mut self, i: i32) {
+        self.stack.push_integer(i);
     }
 
     fn run_full_stop(&mut self) {
         self.ip = usize::MAX;
 
-        match self.stack.as_slice() {
-            [] => {},
-            [f] => println!("Final value: {:?}", f),
-            _ => println!("Process stopped with an incompatible stack size"),
+        if let Err(msg) = self.stack.full_stop_value() {
+            eprintln!("{}", msg)
         }
     }
 
     fn run_push_c(&mut self, chr: char) {
-        let value = Value::Char(chr);
-        self.stack.push(value);
+        self.stack.push_char(chr);
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct Stack(Vec<Value>);
+
+impl Stack {
+    fn new() -> Stack {
+        Stack(Vec::new())
+    }
+
+    fn push_integer(&mut self, n: i32) {
+        let v = Value::Integer(n);
+        self.push_value(v);
+    }
+
+    fn push_char(&mut self, c: char) {
+        let v = Value::Char(c);
+        self.push_value(v);
+    }
+
+    fn pop_integer(&mut self) -> Option<i32> {
+        let top = self.0.pop()?.try_into_integer();
+        match top {
+            Ok(n) => Some(n),
+            Err(v) => {
+                self.push_value(v);
+                None
+            }
+        }
+    }
+
+    fn pop_char(&mut self) -> Option<char> {
+        let top = self.0.pop()?.try_into_char();
+        match top {
+            Ok(c) => Some(c),
+            Err(v) => {
+                self.push_value(v);
+                None
+            }
+        }
+    }
+
+    fn push_value(&mut self, v: Value) {
+        self.0.push(v);
+    }
+
+    fn full_stop_value(&self) -> Result<Value, &'static str> {
+        match self.0.as_slice() {
+            [unique_value] => Ok(unique_value.clone()),
+            [] => Err("Program exited with empty stack"),
+            _ => Err("Program exited with non-unique stack value"),
+        }
     }
 }

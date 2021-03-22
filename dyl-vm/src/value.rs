@@ -11,4 +11,11 @@ impl Value {
             anything => Err(anything),
         }
     }
+
+    pub(crate) fn try_into_char(self) -> Result<char, Value> {
+        match self {
+            Value::Char(c) => Ok(c),
+            anything => Err(anything),
+        }
+    }
 }

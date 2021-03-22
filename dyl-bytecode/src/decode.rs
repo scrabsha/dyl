@@ -1,3 +1,5 @@
+use std::{error::Error, fmt::{self, Display}};
+
 use crate::Instruction;
 
 impl Instruction {
@@ -57,3 +59,14 @@ pub enum DecodingError {
     UnknownOpcode(u8),
     UnexpectedEOF,
 }
+
+impl Display for DecodingError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DecodingError::UnexpectedEOF => write!(f, "Unexpected EOF"),
+            DecodingError::UnknownOpcode(id) => write!(f, "Unknown opcode: `{}`", id),
+        }
+    }
+}
+
+impl Error for DecodingError {}

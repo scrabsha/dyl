@@ -16,7 +16,7 @@ fn main() -> Result<()> {
         // 2
 
         // add_i
-        1
+        // 1
     ];
 
     disassemble(ops.as_slice()).unwrap();

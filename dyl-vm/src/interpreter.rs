@@ -35,7 +35,9 @@ impl Interpreter {
             .expect("attempt to call run_single on a finished interpreter");
 
         let code_tail = self.code.split_at(ip).1;
-        let (instr, len) = Instruction::decode(code_tail).unwrap().0;
+        let (instr, len) = Instruction::decode(code_tail)
+            .with_context(|| format!("Failed to decode instruction at offset {:#x}", ip))?
+            .0;
 
         self.state.increment_instruction_pointer(len)?;
 

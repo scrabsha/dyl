@@ -52,13 +52,26 @@ impl Interpreter {
     }
 
     fn run_add_i(&mut self) -> Result<()> {
-        let lhs = self.stack.pop_integer()?;
-        let rhs = self.stack.pop_integer()?;
+        let (lhs, rhs) = self.pop_pair_i().context("Failed to run `add_i`")?;
 
         let sum = lhs + rhs;
         self.stack.push_integer(sum);
 
         Ok(())
+    }
+
+    fn pop_pair_i(&mut self) -> Result<(i32, i32)> {
+        let lhs = self
+            .stack
+            .pop_integer()
+            .context("Failed to get left-hand-side integer")?;
+
+        let rhs = self
+            .stack
+            .pop_integer()
+            .context("Failed to get right-hand-side integer")?;
+
+        Ok((lhs, rhs))
     }
 
     fn run_push_i(&mut self, i: i32) {
@@ -96,15 +109,15 @@ impl Stack {
     }
 
     fn pop_integer(&mut self) -> Result<i32> {
-        self.pop()?
-            .try_into_integer()
-            .context("While pop-ing from stack")
+        self.pop()
+            .and_then(Value::try_into_integer)
+            .context("Failed to pop an integer from the stack")
     }
 
     fn pop_char(&mut self) -> Result<char> {
-        self.pop()?
-            .try_into_char()
-            .context("While pop-ing from stack")
+        self.pop()
+            .and_then(Value::try_into_char)
+            .context("Failed to pop a char form the stack")
     }
 
     fn pop(&mut self) -> Result<Value> {

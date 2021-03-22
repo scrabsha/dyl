@@ -42,18 +42,18 @@ impl Interpreter {
         self.state.increment_instruction_pointer(len)?;
 
         match instr {
-            Instruction::AddI => self.run_add_i()?,
+            Instruction::AddI => self.run_add_i().context("Failed to run `add_i`")?,
             Instruction::PushI(val) => self.run_push_i(val),
-            Instruction::FullStop => self.run_full_stop()?,
+            Instruction::FullStop => self.run_full_stop().context("Failed to run `f_stop`")?,
             Instruction::PushC(chr) => self.run_push_c(chr),
-            Instruction::CopyV(idx) => self.run_copy_v(idx)?,
+            Instruction::CopyV(idx) => self.run_copy_v(idx).context("Failed to run `copy_v`")?,
         }
 
         Ok(())
     }
 
     fn run_add_i(&mut self) -> Result<()> {
-        let (lhs, rhs) = self.pop_pair_i().context("Failed to run `add_i`")?;
+        let (lhs, rhs) = self.pop_pair_i()?;
 
         let sum = lhs + rhs;
         self.stack.push_integer(sum);
@@ -81,7 +81,7 @@ impl Interpreter {
 
     fn run_full_stop(&mut self) -> Result<()> {
         let v = self.stack.full_stop_value()?;
-        self.state = InterpreterState::Finished(v);
+        self.state = InterpreterState::Finished(v.clone());
 
         Ok(())
     }
@@ -91,7 +91,7 @@ impl Interpreter {
     }
 
     fn run_copy_v(&mut self, idx: u32) -> Result<()> {
-        self.stack.copy_value(idx)
+        self.stack.copy_value(idx).context("Failed to run `copy_v`")
     }
 }
 
@@ -133,9 +133,9 @@ impl Stack {
         self.0.push(v);
     }
 
-    fn full_stop_value(&self) -> Result<Value> {
+    fn full_stop_value(&self) -> Result<&Value> {
         match self.0.as_slice() {
-            [unique_value] => Ok(unique_value.clone()),
+            [unique_value] => Ok(unique_value),
             [] => bail!("Found empty stack at the end of the program"),
             _ => bail!("Expected single-element in the stack at the end of the program"),
         }

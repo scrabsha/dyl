@@ -1,3 +1,5 @@
+use anyhow::{anyhow, bail, Context, Result};
+
 use dyl_bytecode::Instruction;
 
 use crate::value::Value;
@@ -16,13 +18,15 @@ impl Interpreter {
         Interpreter { stack, ip, code }
     }
 
-    pub(crate) fn run(&mut self) {
+    pub(crate) fn run(&mut self) -> Result<()> {
         while self.ip != usize::MAX {
-            self.run_single();
+            self.run_single()?;
         }
+
+        Ok(())
     }
 
-    fn run_single(&mut self) {
+    fn run_single(&mut self) -> Result<()> {
         let code_tail = self.code.split_at(self.ip).1;
         let (instr, len) = Instruction::decode(code_tail).unwrap().0;
 
@@ -36,28 +40,32 @@ impl Interpreter {
         }
     }
 
-    fn run_add_i(&mut self) {
-        let lhs = self.stack.pop_integer().unwrap();
-        let rhs = self.stack.pop_integer().unwrap();
+    fn run_add_i(&mut self) -> Result<()> {
+        let lhs = self.stack.pop_integer()?;
+        let rhs = self.stack.pop_integer()?;
 
         let sum = lhs + rhs;
         self.stack.push_integer(sum);
+
+        Ok(())
     }
 
-    fn run_push_i(&mut self, i: i32) {
+    fn run_push_i(&mut self, i: i32) -> Result<()> {
         self.stack.push_integer(i);
+        Ok(())
     }
 
-    fn run_full_stop(&mut self) {
+    fn run_full_stop(&mut self) -> Result<()> {
         self.ip = usize::MAX;
 
-        if let Err(msg) = self.stack.full_stop_value() {
-            eprintln!("{}", msg)
-        }
+        let v = self.stack.full_stop_value()?;
+        println!("Program exited with `{}` result", v);
+        Ok(())
     }
 
-    fn run_push_c(&mut self, chr: char) {
+    fn run_push_c(&mut self, chr: char) -> Result<()> {
         self.stack.push_char(chr);
+        Ok(())
     }
 }
 
@@ -79,37 +87,31 @@ impl Stack {
         self.push_value(v);
     }
 
-    fn pop_integer(&mut self) -> Option<i32> {
-        let top = self.0.pop()?.try_into_integer();
-        match top {
-            Ok(n) => Some(n),
-            Err(v) => {
-                self.push_value(v);
-                None
-            }
-        }
+    fn pop_integer(&mut self) -> Result<i32> {
+        self.pop()?
+            .try_into_integer()
+            .context("While pop-ing from stack")
     }
 
-    fn pop_char(&mut self) -> Option<char> {
-        let top = self.0.pop()?.try_into_char();
-        match top {
-            Ok(c) => Some(c),
-            Err(v) => {
-                self.push_value(v);
-                None
-            }
-        }
+    fn pop_char(&mut self) -> Result<char> {
+        self.pop()?
+            .try_into_char()
+            .context("While pop-ing from stack")
+    }
+
+    fn pop(&mut self) -> Result<Value> {
+        self.0.pop().ok_or_else(|| anyhow!("Empty stack found"))
     }
 
     fn push_value(&mut self, v: Value) {
         self.0.push(v);
     }
 
-    fn full_stop_value(&self) -> Result<Value, &'static str> {
+    fn full_stop_value(&self) -> Result<Value> {
         match self.0.as_slice() {
             [unique_value] => Ok(unique_value.clone()),
-            [] => Err("Program exited with empty stack"),
-            _ => Err("Program exited with non-unique stack value"),
+            [] => bail!("Found empty stack at the end of the program"),
+            _ => bail!("Expected single-element in the stack at the end of the program"),
         }
     }
 }

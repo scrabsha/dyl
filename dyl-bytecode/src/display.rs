@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter, Result as FResult};
 
-use crate::{Instruction, decode::DecodingError};
+use crate::{decode::DecodingError, Instruction};
 
 impl Display for Instruction {
     fn fmt(&self, f: &mut Formatter) -> FResult {
@@ -9,6 +9,7 @@ impl Display for Instruction {
             Instruction::AddI => write!(f, "add_i"),
             Instruction::FullStop => write!(f, "f_stop"),
             Instruction::PushC(chr) => write!(f, "push_c {}", chr),
+            Instruction::CopyV(idx) => write!(f, "copy_val {}", idx),
         }
     }
 }
@@ -19,7 +20,7 @@ pub fn disassemble(mut bytecode: &[u8]) -> Result<(), DecodingError> {
     while !bytecode.is_empty() {
         let ((instr, len), tail) = Instruction::decode(bytecode)?;
         bytecode = tail;
-        instrs.push((idx,instr));
+        instrs.push((idx, instr));
         idx += len;
     }
 

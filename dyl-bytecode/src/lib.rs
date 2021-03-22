@@ -7,4 +7,5 @@ pub enum Instruction {
     AddI,
     FullStop,
     PushC(char),
+    CopyV(u32),
 }

@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 
 use dyl_bytecode::Instruction;
 
@@ -46,6 +46,7 @@ impl Interpreter {
             Instruction::PushI(val) => self.run_push_i(val),
             Instruction::FullStop => self.run_full_stop()?,
             Instruction::PushC(chr) => self.run_push_c(chr),
+            Instruction::CopyV(idx) => self.run_copy_v(idx)?,
         }
 
         Ok(())
@@ -87,6 +88,10 @@ impl Interpreter {
 
     fn run_push_c(&mut self, chr: char) {
         self.stack.push_char(chr);
+    }
+
+    fn run_copy_v(&mut self, idx: u32) -> Result<()> {
+        self.stack.copy_value(idx)
     }
 }
 
@@ -134,6 +139,21 @@ impl Stack {
             [] => bail!("Found empty stack at the end of the program"),
             _ => bail!("Expected single-element in the stack at the end of the program"),
         }
+    }
+
+    fn copy_value(&mut self, idx: u32) -> Result<()> {
+        ensure!(!self.0.is_empty(), "Out-of-bound stack access");
+
+        let idx = self.0.len() - 1 - idx as usize;
+        let value_to_copy = self
+            .0
+            .get(idx)
+            .ok_or_else(|| anyhow!("Out-of-bound stack access"))?
+            .clone();
+
+        self.0.push(value_to_copy);
+
+        Ok(())
     }
 }
 

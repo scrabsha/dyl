@@ -1,4 +1,7 @@
-use std::{error::Error, fmt::{self, Display}};
+use std::{
+    error::Error,
+    fmt::{self, Display},
+};
 
 use crate::Instruction;
 
@@ -11,6 +14,8 @@ impl Instruction {
             1 => Ok(((Instruction::AddI, 1), input)),
             2 => Ok(((Instruction::FullStop, 1), input)),
             3 => Instruction::decode_push_c(input),
+            4 => Instruction::decode_copy_v(input),
+
             op => Err(DecodingError::UnknownOpcode(op)),
         }
     }
@@ -26,6 +31,13 @@ impl Instruction {
         let (val, input) = Instruction::pump_four(input)?;
         let chr = std::char::from_u32(val).unwrap();
         let instr = Instruction::PushC(chr);
+
+        Ok(((instr, 5), input))
+    }
+
+    fn decode_copy_v(input: InputStream) -> DecodingResult {
+        let (idx, input) = Instruction::pump_four(input)?;
+        let instr = Instruction::CopyV(idx);
 
         Ok(((instr, 5), input))
     }

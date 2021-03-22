@@ -7,30 +7,37 @@ use crate::value::Value;
 pub(crate) struct Interpreter {
     stack: Stack,
     code: Vec<u8>,
-    ip: usize,
+    state: InterpreterState,
 }
 
 impl Interpreter {
     pub(crate) fn from_bytecode(code: Vec<u8>) -> Interpreter {
         let stack = Stack::new();
-        let ip = 0;
+        let state = InterpreterState::beginning();
 
-        Interpreter { stack, ip, code }
+        Interpreter { stack, state, code }
     }
 
-    pub(crate) fn run(&mut self) -> Result<()> {
-        while self.ip != usize::MAX {
+    pub(crate) fn run(&mut self) -> Result<Value> {
+        while self.state.is_running() {
             self.run_single()?;
         }
 
-        Ok(())
+        let final_value = self.state.finished_value().unwrap().clone();
+
+        Ok(final_value)
     }
 
     fn run_single(&mut self) -> Result<()> {
-        let code_tail = self.code.split_at(self.ip).1;
+        let ip = self
+            .state
+            .instruction_pointer()
+            .expect("attempt to call run_single on a finished interpreter");
+
+        let code_tail = self.code.split_at(ip).1;
         let (instr, len) = Instruction::decode(code_tail).unwrap().0;
 
-        self.ip += len;
+        self.state.increment_instruction_pointer(len)?;
 
         match instr {
             Instruction::AddI => self.run_add_i()?,
@@ -57,10 +64,9 @@ impl Interpreter {
     }
 
     fn run_full_stop(&mut self) -> Result<()> {
-        self.ip = usize::MAX;
-
         let v = self.stack.full_stop_value()?;
-        println!("Program exited with `{}` result", v);
+        self.state = InterpreterState::Finished(v);
+
         Ok(())
     }
 
@@ -112,6 +118,47 @@ impl Stack {
             [unique_value] => Ok(unique_value.clone()),
             [] => bail!("Found empty stack at the end of the program"),
             _ => bail!("Expected single-element in the stack at the end of the program"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum InterpreterState {
+    Running(usize),
+    Finished(Value),
+}
+
+impl InterpreterState {
+    fn beginning() -> InterpreterState {
+        InterpreterState::Running(0)
+    }
+
+    fn is_running(&self) -> bool {
+        matches!(self, InterpreterState::Running(_))
+    }
+
+    fn finished_value(&self) -> Option<&Value> {
+        match self {
+            InterpreterState::Finished(v) => Some(v),
+            _ => None,
+        }
+    }
+
+    fn increment_instruction_pointer(&mut self, idx: usize) -> Result<()> {
+        match self {
+            InterpreterState::Running(ip) => *ip += idx,
+            InterpreterState::Finished(_) => {
+                bail!("Attempt to increment instruction pointer on a finished interpreter")
+            }
+        };
+
+        Ok(())
+    }
+
+    fn instruction_pointer(&self) -> Option<usize> {
+        match self {
+            InterpreterState::Running(ip) => Some(*ip),
+            InterpreterState::Finished(_) => None,
         }
     }
 }

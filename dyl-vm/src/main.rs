@@ -11,12 +11,19 @@ fn main() -> Result<()> {
     let ops = vec![
         // push_c a
         3, 0, 0, 0, 97,
+
         // fstop
         // 2
+
         // add_i
         1
     ];
 
     disassemble(ops.as_slice()).unwrap();
-    Interpreter::from_bytecode(ops).run()
+
+    let exit_value = Interpreter::from_bytecode(ops).run()?;
+
+    println!("Program exited with value `{}`", exit_value);
+
+    Ok(())
 }

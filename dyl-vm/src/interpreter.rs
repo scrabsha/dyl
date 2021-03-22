@@ -33,11 +33,13 @@ impl Interpreter {
         self.ip += len;
 
         match instr {
-            Instruction::AddI => self.run_add_i(),
+            Instruction::AddI => self.run_add_i()?,
             Instruction::PushI(val) => self.run_push_i(val),
-            Instruction::FullStop => self.run_full_stop(),
+            Instruction::FullStop => self.run_full_stop()?,
             Instruction::PushC(chr) => self.run_push_c(chr),
         }
+
+        Ok(())
     }
 
     fn run_add_i(&mut self) -> Result<()> {
@@ -50,9 +52,8 @@ impl Interpreter {
         Ok(())
     }
 
-    fn run_push_i(&mut self, i: i32) -> Result<()> {
+    fn run_push_i(&mut self, i: i32) {
         self.stack.push_integer(i);
-        Ok(())
     }
 
     fn run_full_stop(&mut self) -> Result<()> {
@@ -63,9 +64,8 @@ impl Interpreter {
         Ok(())
     }
 
-    fn run_push_c(&mut self, chr: char) -> Result<()> {
+    fn run_push_c(&mut self, chr: char) {
         self.stack.push_char(chr);
-        Ok(())
     }
 }
 

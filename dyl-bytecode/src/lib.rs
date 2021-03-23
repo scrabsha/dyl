@@ -8,4 +8,9 @@ pub enum Instruction {
     FullStop,
     PushC(char),
     CopyV(u32),
+    Call(u32),
+    Return {
+        pointer_offset: u32,
+        value_offset: u32,
+    },
 }

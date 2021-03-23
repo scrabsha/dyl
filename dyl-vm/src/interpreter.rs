@@ -47,6 +47,13 @@ impl Interpreter {
             Instruction::FullStop => self.run_full_stop().context("Failed to run `f_stop`")?,
             Instruction::PushC(chr) => self.run_push_c(chr),
             Instruction::CopyV(idx) => self.run_copy_v(idx).context("Failed to run `copy_v`")?,
+            Instruction::Call(idx) => self.run_call(idx),
+            Instruction::Return {
+                pointer_offset,
+                value_offset,
+            } => self
+                .run_return(pointer_offset, value_offset)
+                .context("Failed to run `ret`")?,
         }
 
         Ok(())
@@ -92,6 +99,41 @@ impl Interpreter {
 
     fn run_copy_v(&mut self, idx: u32) -> Result<()> {
         self.stack.copy_value(idx).context("Failed to run `copy_v`")
+    }
+
+    fn run_call(&mut self, idx: u32) {
+        let ip = self
+            .state
+            .instruction_pointer()
+            .expect("run_call called on a finished interpreter");
+
+        self.stack.push_instruction_pointer(ip as u32);
+        self.state.replace_instruction_pointer(idx);
+    }
+
+    fn run_return(&mut self, pointer_offset: u32, value_offset: u32) -> Result<()> {
+        let initial_offset = self
+            .stack
+            .get_instruction_pointer_at_offset(pointer_offset)
+            .context("Failed to get return address")?;
+
+        let value_to_replace = self
+            .stack
+            .get_at_offset(value_offset)
+            .context("Failed to get return value")?
+            .clone();
+
+        self.stack
+            .replace_instruction_pointer(pointer_offset, value_to_replace)
+            .context("Failed to replace stack pointer")?;
+
+        self.stack
+            .truncate(pointer_offset - 1)
+            .context("Failed to resize stack")?;
+
+        self.state.replace_instruction_pointer(initial_offset);
+
+        Ok(())
     }
 }
 
@@ -145,13 +187,63 @@ impl Stack {
         ensure!(!self.0.is_empty(), "Out-of-bound stack access");
 
         let idx = self.0.len() - 1 - idx as usize;
-        let value_to_copy = self
+        let value = self
             .0
             .get(idx)
             .ok_or_else(|| anyhow!("Out-of-bound stack access"))?
             .clone();
 
-        self.0.push(value_to_copy);
+        self.0.push(value);
+
+        Ok(())
+    }
+
+    fn push_instruction_pointer(&mut self, idx: u32) {
+        let value = Value::InstructionPointer(idx);
+        self.0.push(value);
+    }
+
+    fn get_instruction_pointer_at_offset(&mut self, idx: u32) -> Result<u32> {
+        self.get_at_offset(idx)?
+            .clone()
+            .try_into_instruction_pointer()
+    }
+
+    fn get_at_offset(&mut self, idx: u32) -> Result<&Value> {
+        ensure!(!self.0.is_empty(), "Out-of-bound stack access");
+
+        let idx = self.0.len() - 1 - idx as usize;
+
+        self.0
+            .get(idx)
+            .ok_or_else(|| anyhow!("Out-of-bound stack access"))
+    }
+
+    fn replace_instruction_pointer(&mut self, idx: u32, v: Value) -> Result<()> {
+        ensure!(!self.0.is_empty(), "Out-of-bound stack access");
+
+        let idx = self.0.len() - 1 - idx as usize;
+
+        let value_to_replace = self
+            .0
+            .get_mut(idx)
+            .ok_or_else(|| anyhow!("Out-of-bound stack access"))?;
+
+        ensure!(
+            value_to_replace.is_instruction_pointer(),
+            "Instruction pointer not found"
+        );
+
+        *value_to_replace = v;
+
+        Ok(())
+    }
+
+    fn truncate(&mut self, idx: u32) -> Result<()> {
+        ensure!(!self.0.is_empty(), "Out-of-bound stack access");
+
+        let idx = self.0.len() - 1 - idx as usize;
+        self.0.truncate(idx);
 
         Ok(())
     }
@@ -195,5 +287,9 @@ impl InterpreterState {
             InterpreterState::Running(ip) => Some(*ip),
             InterpreterState::Finished(_) => None,
         }
+    }
+
+    fn replace_instruction_pointer(&mut self, idx: u32) {
+        *self = InterpreterState::Running(idx as usize);
     }
 }

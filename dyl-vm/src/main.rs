@@ -9,14 +9,17 @@ mod value;
 fn main() -> Result<()> {
     #[rustfmt::skip]
     let ops = vec![
-        // push_c a
-        3, 0, 0, 0, 97,
+        // Call 6
+        5, 0, 0, 0, 6,
 
         // fstop
-        // 2
+        2,
 
-        // add_i
-        // 1
+        // (at offset 6) push_i 42
+        0, 0, 0, 0, 42,
+
+        // ret 0 1
+        6, 0, 0, 0, 0, 0, 0, 0, 1
     ];
 
     disassemble(ops.as_slice()).unwrap();

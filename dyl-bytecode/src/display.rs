@@ -10,6 +10,8 @@ impl Display for Instruction {
             Instruction::FullStop => write!(f, "f_stop"),
             Instruction::PushC(chr) => write!(f, "push_c {}", chr),
             Instruction::CopyV(idx) => write!(f, "copy_val {}", idx),
+            Instruction::Call(offset) => write!(f, "call {}", offset),
+            Instruction::Return { pointer_offset, value_offset } => write!(f, "ret {} {}", value_offset, pointer_offset),
         }
     }
 }

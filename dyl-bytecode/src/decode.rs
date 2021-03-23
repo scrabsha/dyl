@@ -15,6 +15,8 @@ impl Instruction {
             2 => Ok(((Instruction::FullStop, 1), input)),
             3 => Instruction::decode_push_c(input),
             4 => Instruction::decode_copy_v(input),
+            5 => Instruction::decode_call(input),
+            6 => Instruction::decode_ret(input),
 
             op => Err(DecodingError::UnknownOpcode(op)),
         }
@@ -40,6 +42,24 @@ impl Instruction {
         let instr = Instruction::CopyV(idx);
 
         Ok(((instr, 5), input))
+    }
+
+    fn decode_call(input: InputStream) -> DecodingResult {
+        let (code_pointer, input) = Instruction::pump_four(input)?;
+        let instr = Instruction::Call(code_pointer);
+
+        Ok(((instr, 5), input))
+    }
+
+    fn decode_ret(input: InputStream) -> DecodingResult {
+        let (value_offset, input) = Instruction::pump_four(input)?;
+        let (pointer_offset, input) = Instruction::pump_four(input)?;
+        let instr = Instruction::Return {
+            value_offset,
+            pointer_offset,
+        };
+
+        Ok(((instr, 9), input))
     }
 
     fn pump_one(input: InputStream) -> TmpDecodingResult<u8> {

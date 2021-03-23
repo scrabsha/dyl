@@ -9,6 +9,9 @@ checksum = "81cddc5f91628367664cc7c69714ff08deee8a3efc54623011c772544d7b2767"
 [[package]]
 name = "dyl-bytecode"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+]
 
 [[package]]
 name = "dyl-vm"

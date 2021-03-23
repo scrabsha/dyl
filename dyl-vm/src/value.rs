@@ -78,7 +78,7 @@ impl Display for Type {
         match self {
             Type::Integer => write!(f, "integer"),
             Type::Char => write!(f, "char"),
-            Type::InstructionPointer => write!(f, "instruction pointer")
+            Type::InstructionPointer => write!(f, "instruction pointer"),
         }
     }
 }

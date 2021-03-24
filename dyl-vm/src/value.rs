@@ -61,7 +61,7 @@ impl Display for Value {
         match self {
             Value::Char(c) => write!(f, "{}", c),
             Value::Integer(i) => write!(f, "{}", i),
-            Value::InstructionPointer(ip) => write!(f, "{}", ip),
+            Value::InstructionPointer(ip) => write!(f, "*{}*", ip),
         }
     }
 }

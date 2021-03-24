@@ -18,7 +18,8 @@ impl Instruction {
             3 => Instruction::decode_push_c(input).context("Failed to decode `push_c` instruction"),
             4 => Instruction::decode_copy_v(input).context("Failed to decode `copy_v` instruction"),
             5 => Instruction::decode_call(input).context("Failed to decode `call` instruction"),
-            6 => Instruction::decode_ret(input).context("Failed to decode `ret` instruction"),
+            6 => Instruction::decode_ret_w(input).context("Failed to decode `ret_w` instruction"),
+            7 => Instruction::decode_ret(input).context("Failed to decode `ret` instruction"),
 
             op => bail!(DecodingError::UnknownOpcode(op)),
         }
@@ -57,13 +58,26 @@ impl Instruction {
         Ok(((instr, 5), input))
     }
 
-    fn decode_ret(input: InputStream) -> DecodingResult {
+    fn decode_ret_w(input: InputStream) -> DecodingResult {
         let (value_offset, input) =
             Instruction::pump_four(input).context("Failed to get value address to return")?;
         let (pointer_offset, input) = Instruction::pump_four(input)
             .context("Failed to get function pointer to return back")?;
-        let instr = Instruction::Return {
+        let instr = Instruction::RetW {
             value_offset,
+            pointer_offset,
+        };
+
+        Ok(((instr, 9), input))
+    }
+
+    fn decode_ret(input: InputStream) -> DecodingResult {
+        let (return_offset, input) =
+            Instruction::pump_four(input).context("Failed to get return offset")?;
+        let (pointer_offset, input) = Instruction::pump_four(input)
+            .context("Failed to get function pointer to return back")?;
+        let instr = Instruction::Ret {
+            return_offset,
             pointer_offset,
         };
 

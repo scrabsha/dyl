@@ -18,8 +18,8 @@ fn main() -> Result<()> {
         // (at offset 6) push_i 42
         0, 0, 0, 0, 42,
 
-        // ret 0 1
-        6, 0, 0, 0, 0, 0, 0, 0, 1
+        // ret 2 1
+        7, 0, 0, 0, 2, 0, 0, 0, 1,
     ];
 
     disassemble(ops.as_slice()).unwrap();

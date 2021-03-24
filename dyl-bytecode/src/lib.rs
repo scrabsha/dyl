@@ -9,8 +9,12 @@ pub enum Instruction {
     PushC(char),
     CopyV(u32),
     Call(u32),
-    Return {
+    RetW {
         pointer_offset: u32,
         value_offset: u32,
+    },
+    Ret {
+        return_offset: u32,
+        pointer_offset: u32,
     },
 }

@@ -48,12 +48,18 @@ impl Interpreter {
             Instruction::PushC(chr) => self.run_push_c(chr),
             Instruction::CopyV(idx) => self.run_copy_v(idx).context("Failed to run `copy_v`")?,
             Instruction::Call(idx) => self.run_call(idx),
-            Instruction::Return {
+            Instruction::Ret {
+                return_offset,
+                pointer_offset,
+            } => self
+                .run_ret(return_offset, pointer_offset)
+                .context("Failed to run `ret`")?,
+            Instruction::RetW {
                 pointer_offset,
                 value_offset,
             } => self
-                .run_return(pointer_offset, value_offset)
-                .context("Failed to run `ret`")?,
+                .run_ret_w(pointer_offset, value_offset)
+                .context("Failed to run `ret_w`")?,
         }
 
         Ok(())
@@ -111,7 +117,7 @@ impl Interpreter {
         self.state.replace_instruction_pointer(idx);
     }
 
-    fn run_return(&mut self, pointer_offset: u32, value_offset: u32) -> Result<()> {
+    fn run_ret_w(&mut self, pointer_offset: u32, value_offset: u32) -> Result<()> {
         let initial_offset = self
             .stack
             .get_instruction_pointer_at_offset(pointer_offset)
@@ -129,6 +135,21 @@ impl Interpreter {
 
         self.stack
             .truncate(pointer_offset - 1)
+            .context("Failed to resize stack")?;
+
+        self.state.replace_instruction_pointer(initial_offset);
+
+        Ok(())
+    }
+
+    fn run_ret(&mut self, return_offset: u32, pointer_offset: u32) -> Result<()> {
+        let initial_offset = self
+            .stack
+            .get_instruction_pointer_at_offset(pointer_offset)
+            .context("Failed to get return address")?;
+
+        self.stack
+            .truncate(return_offset - 1)
             .context("Failed to resize stack")?;
 
         self.state.replace_instruction_pointer(initial_offset);

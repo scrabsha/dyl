@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use std::fmt::{Display, Formatter, Result as FResult};
 
-use crate::{decode::DecodingError, Instruction};
+use crate::Instruction;
 
 impl Display for Instruction {
     fn fmt(&self, f: &mut Formatter) -> FResult {
@@ -12,11 +12,15 @@ impl Display for Instruction {
             Instruction::FullStop => write!(f, "f_stop"),
             Instruction::PushC(chr) => write!(f, "push_c {}", chr),
             Instruction::CopyV(idx) => write!(f, "copy_val {}", idx),
+            Instruction::Ret {
+                return_offset,
+                pointer_offset,
+            } => write!(f, "ret {} {}", return_offset, pointer_offset),
             Instruction::Call(offset) => write!(f, "call {}", offset),
-            Instruction::Return {
+            Instruction::RetW {
                 pointer_offset,
                 value_offset,
-            } => write!(f, "ret {} {}", value_offset, pointer_offset),
+            } => write!(f, "ret_w {} {}", value_offset, pointer_offset),
         }
     }
 }

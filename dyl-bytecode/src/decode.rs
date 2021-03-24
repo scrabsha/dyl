@@ -21,7 +21,8 @@ impl Instruction {
             6 => Instruction::decode_ret_w(input).context("Failed to decode `ret_w` instruction"),
             7 => Instruction::decode_ret(input).context("Failed to decode `ret` instruction"),
             8 => Instruction::decode_res_v(input).context("Failed to decode `res_v` instruction"),
-            9 => Instruction::decode_copy_v_s(input).context("Failed to decode `copy_v_s` instruction"),
+            9 => Instruction::decode_copy_v_s(input)
+                .context("Failed to decode `copy_v_s` instruction"),
 
             op => bail!(DecodingError::UnknownOpcode(op)),
         }
@@ -95,7 +96,8 @@ impl Instruction {
     }
 
     fn decode_copy_v_s(input: InputStream) -> DecodingResult {
-        let (offset, input) = Instruction::pump_four(input).context("Failed to get copy destination")?;
+        let (offset, input) =
+            Instruction::pump_four(input).context("Failed to get copy destination")?;
         let instr = Instruction::CopyVS(offset);
 
         Ok(((instr, 5), input))

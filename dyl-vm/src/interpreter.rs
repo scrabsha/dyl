@@ -138,7 +138,7 @@ impl Interpreter {
             .context("Failed to replace stack pointer")?;
 
         self.stack
-            .truncate(pointer_offset - 1)
+            .truncate(pointer_offset)
             .context("Failed to resize stack")?;
 
         self.state.replace_instruction_pointer(initial_offset);
@@ -153,7 +153,7 @@ impl Interpreter {
             .context("Failed to get return address")?;
 
         self.stack
-            .truncate(return_offset - 1)
+            .truncate(return_offset)
             .context("Failed to resize stack")?;
 
         self.state.replace_instruction_pointer(initial_offset);
@@ -283,7 +283,7 @@ impl Stack {
     fn truncate(&mut self, idx: u32) -> Result<()> {
         ensure!(!self.0.is_empty(), "Out-of-bound stack access");
 
-        let idx = self.0.len() - 1 - idx as usize;
+        let idx = self.0.len() - idx as usize;
         self.0.truncate(idx);
 
         Ok(())

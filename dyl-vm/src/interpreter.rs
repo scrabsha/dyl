@@ -60,6 +60,10 @@ impl Interpreter {
             } => self
                 .run_ret_w(pointer_offset, value_offset)
                 .context("Failed to run `ret_w`")?,
+            Instruction::ResV(offset) => self.run_res_v(offset),
+            Instruction::CopyVS(offset) => self
+                .run_copy_v_s(offset)
+                .context("Failed to run `copy_v_s`")?,
         }
 
         Ok(())
@@ -153,6 +157,22 @@ impl Interpreter {
             .context("Failed to resize stack")?;
 
         self.state.replace_instruction_pointer(initial_offset);
+
+        Ok(())
+    }
+
+    fn run_res_v(&mut self, offset: u32) {
+        for _ in 0..offset {
+            self.stack.push_integer(0);
+        }
+    }
+
+    fn run_copy_v_s(&mut self, offset: u32) -> Result<()> {
+        let v = self.stack.pop().context("Failed to get value to copy")?;
+
+        self.stack
+            .replace(offset, v)
+            .context("Failed to replace stack value")?;
 
         Ok(())
     }
@@ -265,6 +285,19 @@ impl Stack {
 
         let idx = self.0.len() - 1 - idx as usize;
         self.0.truncate(idx);
+
+        Ok(())
+    }
+
+    fn replace(&mut self, offset: u32, val: Value) -> Result<()> {
+        let idx = self.0.len() - offset as usize;
+
+        let dest = self
+            .0
+            .get_mut(idx)
+            .ok_or_else(|| anyhow!("Out-of-bound stack access"))?;
+
+        *dest = val;
 
         Ok(())
     }

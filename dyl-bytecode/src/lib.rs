@@ -17,4 +17,6 @@ pub enum Instruction {
         return_offset: u32,
         pointer_offset: u32,
     },
+    ResV(u32),
+    CopyVS(u32),
 }

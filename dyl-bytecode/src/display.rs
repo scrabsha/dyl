@@ -21,6 +21,8 @@ impl Display for Instruction {
                 pointer_offset,
                 value_offset,
             } => write!(f, "ret_w {} {}", value_offset, pointer_offset),
+            Instruction::ResV(offset) => write!(f, "res_v {}", offset),
+            Instruction::CopyVS(offset) => write!(f, "copy_v_s {}", offset),
         }
     }
 }

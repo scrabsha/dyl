@@ -6,6 +6,9 @@ use interpreter::Interpreter;
 mod interpreter;
 mod value;
 
+#[cfg(test)]
+mod tests;
+
 fn main() -> Result<()> {
     #[rustfmt::skip]
     let ops = vec![

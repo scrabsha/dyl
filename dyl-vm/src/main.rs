@@ -12,13 +12,13 @@ fn main() -> Result<()> {
         // res_v 1
         8, 0, 0, 0, 1,
 
-        // Call 11
-        5, 0, 0, 0, 11,
+        // Call 3
+        5, 0, 0, 0, 3,
 
         // fstop
         2,
 
-        // (at offset 11) push_i 42
+        // (index 3) push_i 42
         0, 0, 0, 0, 42,
         
         // copy_s_v 1
@@ -32,7 +32,7 @@ fn main() -> Result<()> {
     disassemble(ops.as_slice()).unwrap();
 
     println!("Program execution:");
-    let exit_value = Interpreter::from_bytecode(ops).run()?;
+    let exit_value = Interpreter::from_bytecode(ops.as_slice())?.run()?;
 
     println!("Program exited with value `{}`", exit_value);
 

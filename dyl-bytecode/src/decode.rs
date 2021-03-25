@@ -8,6 +8,22 @@ use std::{
 use crate::Instruction;
 
 impl Instruction {
+    pub fn from_bytes(mut input: &[u8]) -> Result<Vec<Instruction>> {
+        let mut instrs = Vec::new();
+        let mut idx = 0;
+
+        while !input.is_empty() {
+            let ((instr, len), tail) = Instruction::decode(input)
+                .with_context(|| format!("Failed to read instruction at byte {:#06x}", idx))?;
+
+            instrs.push(instr);
+            idx += len;
+            input = tail;
+        }
+
+        Ok(instrs)
+    }
+
     pub fn decode(input: InputStream) -> DecodingResult {
         let (op, input) = Instruction::pump_one(input)?;
 

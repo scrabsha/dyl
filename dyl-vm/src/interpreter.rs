@@ -6,16 +6,17 @@ use crate::value::Value;
 
 pub(crate) struct Interpreter {
     stack: Stack,
-    code: Vec<u8>,
+    code: Vec<Instruction>,
     state: InterpreterState,
 }
 
 impl Interpreter {
-    pub(crate) fn from_bytecode(code: Vec<u8>) -> Interpreter {
+    pub(crate) fn from_bytecode(code: &[u8]) -> Result<Interpreter> {
         let stack = Stack::new();
         let state = InterpreterState::beginning();
+        let code = Instruction::from_bytes(code).context("Failed to decode input")?;
 
-        Interpreter { stack, state, code }
+        Ok(Interpreter { stack, state, code })
     }
 
     pub(crate) fn run(&mut self) -> Result<Value> {
@@ -34,12 +35,13 @@ impl Interpreter {
             .instruction_pointer()
             .expect("attempt to call run_single on a finished interpreter");
 
-        let code_tail = self.code.split_at(ip).1;
-        let (instr, len) = Instruction::decode(code_tail)
-            .with_context(|| format!("Failed to decode instruction at offset {:#x}", ip))?
-            .0;
+        let instr = self
+            .code
+            .get(ip)
+            .ok_or_else(|| anyhow!("Failed to read instruction at index `{}`", ip))?
+            .clone();
 
-        self.state.increment_instruction_pointer(len)?;
+        self.state.increment_instruction_pointer()?;
 
         match instr {
             Instruction::AddI => self.run_add_i().context("Failed to run `add_i`")?,
@@ -325,9 +327,9 @@ impl InterpreterState {
         }
     }
 
-    fn increment_instruction_pointer(&mut self, idx: usize) -> Result<()> {
+    fn increment_instruction_pointer(&mut self) -> Result<()> {
         match self {
-            InterpreterState::Running(ip) => *ip += idx,
+            InterpreterState::Running(ip) => *ip += 1,
             InterpreterState::Finished(_) => {
                 bail!("Attempt to increment instruction pointer on a finished interpreter")
             }

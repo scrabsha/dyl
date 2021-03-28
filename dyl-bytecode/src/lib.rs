@@ -1,5 +1,8 @@
 pub mod decode;
 pub mod display;
+pub mod operations;
+
+use operations::{AddI, Call, FStop, PopCopy, PushCopy, PushI, ResV, Ret};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Instruction {
@@ -8,7 +11,7 @@ pub enum Instruction {
     /// ```none
     /// push(v)
     /// ```
-    PushI(i32),
+    PushI(PushI),
 
     /// Pops two integers from the stack, add them toghether, pushes the result
     ///
@@ -17,18 +20,10 @@ pub enum Instruction {
     /// b = s.pop()
     /// push(a + b)
     /// ```
-    AddI,
+    AddI(AddI),
 
     /// Stops the program, with s[0] as return value.
-    FullStop,
-
-    /// Pushes a constant character on the stack
-    ///
-    /// ```none
-    /// push(c)
-    /// ```
-
-    PushC(char),
+    FStop(FStop),
 
     /// Copies a value at a given index, pushes it on top of the stack.
     ///
@@ -36,7 +31,7 @@ pub enum Instruction {
     /// a = get(idx)
     /// push(a)
     /// ```
-    CopyV(u32),
+    PushCopy(PushCopy),
 
     /// Pushes the current instruction pointer on the stack, sets the
     /// instruction pointer to the specified address.
@@ -45,21 +40,7 @@ pub enum Instruction {
     /// push(ip)
     /// ip = ptr
     /// ```
-    Call(u32),
-
-    /// Copies the current instruction pointer at a specific stack offset,
-    /// replaces it with a value on the stack, and jumps to the said
-    /// instruction pointer.
-    ///
-    /// ```none
-    /// ip = get(pointer)
-    /// tmp = get(value)
-    /// set(pointer, value)
-    /// ```
-    RetW {
-        pointer_offset: u32,
-        value_offset: u32,
-    },
+    Call(Call),
 
     /// Sets the instruction pointer to a value in the stack, shrinks the
     /// stack by a specific amount.
@@ -68,10 +49,7 @@ pub enum Instruction {
     /// ip = get(pointer)
     /// shrink(len(stack) - return)
     /// ```
-    Ret {
-        return_offset: u32,
-        pointer_offset: u32,
-    },
+    Ret(Ret),
 
     /// Pushes a constant amount of zeros in the stack.
     ///
@@ -80,7 +58,7 @@ pub enum Instruction {
     ///     push(0)
     /// }
     /// ```
-    ResV(u32),
+    ResV(ResV),
 
     /// Pops a value from the stack and copies it at a given stack index.
     ///
@@ -89,5 +67,19 @@ pub enum Instruction {
     /// set(index, tmp)
     /// pop()
     /// ```
-    CopyVS(u32),
+    PopCopy(PopCopy),
 }
+
+macro_rules! impl_from_operation {
+    ($( $operation:ident ),* $(,)?) => {
+        $(
+            impl From<$operation> for Instruction {
+                fn from(op: $operation) -> Instruction {
+                    Instruction::$operation(op)
+                }
+            }
+        )*
+    };
+}
+
+impl_from_operation! { PushI, AddI, FStop, PushCopy, Call, Ret, ResV, PopCopy }

@@ -5,6 +5,7 @@ use interpreter::Interpreter;
 
 mod interpreter;
 mod value;
+mod runnable;
 
 #[cfg(test)]
 mod tests;

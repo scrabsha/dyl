@@ -1,4 +1,4 @@
-use dyl_bytecode::Instruction::*;
+use dyl_bytecode::{Instruction, operations::{AddI, Call, FStop, PopCopy, PushCopy, PushI, ResV, Ret}};
 
 use crate::interpreter::Interpreter;
 use crate::value::Value;
@@ -23,33 +23,33 @@ macro_rules! test_bytecode_execution {
 
 test_bytecode_execution! {
     push_i_simple :: {
-        PushI(42),
-        FullStop,
+        Instruction::PushI(PushI(42)),
+        Instruction::FStop(FStop),
     } => |rslt| assert_eq!(rslt.unwrap(), Value::Integer(42)),
 }
 
 test_bytecode_execution! {
     add_i_simple :: {
-        PushI(40),
-        PushI(1),
-        PushI(1),
-        AddI,
-        AddI,
-        FullStop
+        Instruction::PushI(PushI(40)),
+        Instruction::PushI(PushI(1)),
+        Instruction::PushI(PushI(1)),
+        Instruction::AddI(AddI),
+        Instruction::AddI(AddI),
+        Instruction::FStop(FStop),
     } => |rslt| assert_eq!(rslt.unwrap(), Value::Integer(42)),
 }
 
 test_bytecode_execution! {
     function_simple :: {
-        ResV(1),   //                     |  0 |
-        PushI(41), //                | 41 |  0 |
-        Call(4),   //           | IP | 41 |  0 |
-        FullStop,  //                     | 42 |
+        Instruction::ResV(ResV(1)),         //                     |  0 |
+        Instruction::PushI(PushI(41)),      //                | 41 |  0 |
+        Instruction::Call(Call(4)),         //           | IP | 41 |  0 |
+        Instruction::FStop(FStop),          //                     | 42 |
 
-        CopyV(1),  //      | 41 | IP | 41 |  0 |
-        PushI(1),  // |  1 | 41 | IP | 41 |  0 |
-        AddI,      //      | 42 | IP | 41 |  0 |
-        CopyVS(3), //           | IP | 41 | 42 |
-        Ret { pointer_offset: 0, return_offset: 2 },
+        Instruction::PushCopy(PushCopy(1)),  //      | 41 | IP | 41 |  0 |
+        Instruction::PushI(PushI(1)),        // |  1 | 41 | IP | 41 |  0 |
+        Instruction::AddI(AddI),             //      | 42 | IP | 41 |  0 |
+        Instruction::PopCopy(PopCopy(3)),    //           | IP | 41 | 42 |
+        Instruction::Ret(Ret { ip_offset: 0, shrink_offset: 2 }),
     } => |rslt| assert_eq!(rslt.unwrap(), Value::Integer(42)),
 }

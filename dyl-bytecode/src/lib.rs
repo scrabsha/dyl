@@ -70,6 +70,40 @@ pub enum Instruction {
     PopCopy(PopCopy),
 }
 
+impl Instruction {
+    pub fn push_i(i: i32) -> Instruction {
+        PushI(i).into()
+    }
+
+    pub fn add_i() -> Instruction {
+        AddI.into()
+    }
+
+    pub fn f_stop() -> Instruction {
+        FStop.into()
+    }
+
+    pub fn push_cpy(idx: u16) -> Instruction {
+        PushCopy(idx).into()
+    }
+
+    pub fn call(ptr: u32) -> Instruction {
+        Call(ptr).into()
+    }
+
+    pub fn ret(ip_offset: u16, shrink_offset: u16) -> Instruction {
+        Ret { shrink_offset, ip_offset }.into()
+    }
+
+    pub fn res_v(idx: u16) -> Instruction {
+        ResV(idx).into()
+    }
+
+    pub fn pop_cpy(idx: u16) -> Instruction {
+        PopCopy(idx).into()
+    }
+}
+
 macro_rules! impl_from_operation {
     ($( $operation:ident ),* $(,)?) => {
         $(

@@ -7,7 +7,7 @@ use std::{
 
 use crate::Instruction;
 
-pub(crate) const AVAILABLE_DECODERS: [Decoder; 8] = [
+pub(crate) const AVAILABLE_DECODERS: [Decoder; 9] = [
     PushI::decode_and_wrap,
     AddI::decode_and_wrap,
     FStop::decode_and_wrap,
@@ -16,6 +16,7 @@ pub(crate) const AVAILABLE_DECODERS: [Decoder; 8] = [
     Ret::decode_and_wrap,
     ResV::decode_and_wrap,
     PopCopy::decode_and_wrap,
+    Goto::decode_and_wrap,
 ];
 
 pub(crate) type Decoder = fn(&[u8]) -> Result<(Instruction, usize, &[u8])>;
@@ -135,7 +136,7 @@ impl Operation for Call {
     const DISPLAY_NAME: &'static str = "call";
 
     fn decode(input: &[u8]) -> Result<(Self, &[u8])> {
-        let (idx, input) = pump_four(input).context("Failed to get fonction address to call")?;
+        let (idx, input) = pump_four(input).context("Failed to get function address to call")?;
         let instr = Call(idx);
 
         Ok((instr, input))
@@ -221,6 +222,28 @@ impl Operation for PopCopy {
 impl Display for PopCopy {
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(f, "pop_copy {}", self.0)
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Goto(pub u32);
+
+impl Operation for Goto {
+    const ID: usize = next_id![PopCopy];
+    const SIZE: usize = 5;
+    const DISPLAY_NAME: &'static str = "goto";
+
+    fn decode(input: &[u8]) -> Result<(Self, &[u8])> {
+        let (addr, rest) = pump_four(input).context("Failed to get goto destination")?;
+        let instr = Goto(addr);
+
+        Ok((instr, rest))
+    }
+}
+
+impl Display for Goto {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "goto {}", self.0)
     }
 }
 

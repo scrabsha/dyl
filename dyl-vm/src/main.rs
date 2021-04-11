@@ -4,8 +4,8 @@ use dyl_bytecode::display::disassemble;
 use interpreter::Interpreter;
 
 mod interpreter;
-mod value;
 mod runnable;
+mod value;
 
 #[cfg(test)]
 mod tests;

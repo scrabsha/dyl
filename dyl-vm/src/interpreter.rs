@@ -2,8 +2,8 @@ use anyhow::{anyhow, bail, ensure, Context, Result};
 
 use dyl_bytecode::Instruction;
 
-use crate::{runnable::RunStatus, value::Value};
 use crate::runnable::Runnable;
+use crate::{runnable::RunStatus, value::Value};
 
 pub(crate) struct Interpreter {
     stack: Stack,
@@ -24,7 +24,7 @@ impl Interpreter {
 
     pub(crate) fn run(&mut self) -> Result<Value> {
         let mut ip = 0;
-        
+
         let final_value = loop {
             match self.run_single(ip)? {
                 RunStatus::ContinueToNext => ip += 1,

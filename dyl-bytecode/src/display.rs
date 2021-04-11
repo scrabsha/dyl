@@ -15,6 +15,7 @@ impl Display for Instruction {
             Instruction::Call(op) => op.fmt(f),
             Instruction::ResV(op) => op.fmt(f),
             Instruction::PopCopy(op) => op.fmt(f),
+            Instruction::Goto(op) => op.fmt(f),
         }
     }
 }

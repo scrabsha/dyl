@@ -2,7 +2,7 @@ pub mod decode;
 pub mod display;
 pub mod operations;
 
-use operations::{AddI, Call, FStop, PopCopy, PushCopy, PushI, ResV, Ret};
+use operations::{AddI, Call, FStop, Goto, PopCopy, PushCopy, PushI, ResV, Ret};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Instruction {
@@ -68,6 +68,13 @@ pub enum Instruction {
     /// pop()
     /// ```
     PopCopy(PopCopy),
+
+    /// Changes the instruction pointer to a specific value.
+    ///
+    /// ```none
+    /// ip = ptr
+    /// ```
+    Goto(Goto),
 }
 
 impl Instruction {
@@ -92,7 +99,11 @@ impl Instruction {
     }
 
     pub fn ret(ip_offset: u16, shrink_offset: u16) -> Instruction {
-        Ret { shrink_offset, ip_offset }.into()
+        Ret {
+            shrink_offset,
+            ip_offset,
+        }
+        .into()
     }
 
     pub fn res_v(idx: u16) -> Instruction {
@@ -101,6 +112,10 @@ impl Instruction {
 
     pub fn pop_cpy(idx: u16) -> Instruction {
         PopCopy(idx).into()
+    }
+
+    pub fn goto(addr: u32) -> Instruction {
+        Goto(addr).into()
     }
 }
 
@@ -116,4 +131,4 @@ macro_rules! impl_from_operation {
     };
 }
 
-impl_from_operation! { PushI, AddI, FStop, PushCopy, Call, Ret, ResV, PopCopy }
+impl_from_operation! { PushI, AddI, FStop, PushCopy, Call, Ret, ResV, PopCopy, Goto }

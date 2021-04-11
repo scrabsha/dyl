@@ -51,6 +51,11 @@ macro_rules! generate_bytecode {
         generate_bytecode! { @internal($acc, $val + 1) { $( $tail )* } }
     };
 
+    (@internal($acc:ident, $val:expr) { goto $label:ident $( $tail:tt )* } ) => {
+        $acc.push(dyl_bytecode::Instruction::goto($label));
+        generate_bytecode! { @internal($acc, $val + 1) { $( $tail )* } }
+    };
+
     ( $( $tail:tt )* ) => {{
         let mut acc = Vec::new();
         generate_bytecode! { @internal(acc, 0) { $( $tail )* } };
@@ -225,5 +230,16 @@ test_bytecode_execution! {
             add_i
             pop_cpy 3
             ret 2 0
+    } = Ok(Value::Integer(42)),
+}
+
+test_bytecode_execution! {
+    goto_simple :: {
+            goto NEXT
+        PREV:
+            push_i 42
+            f_stop
+        NEXT:
+            goto PREV
     } = Ok(Value::Integer(42)),
 }

@@ -1,6 +1,9 @@
 use anyhow::{Context, Result};
 
-use dyl_bytecode::{Instruction, operations::{AddI, Call, FStop, PopCopy, PushCopy, PushI, ResV, Ret}};
+use dyl_bytecode::{
+    operations::{AddI, Call, FStop, Goto, PopCopy, PushCopy, PushI, ResV, Ret},
+    Instruction,
+};
 
 use crate::{interpreter::Stack, value::Value};
 
@@ -20,7 +23,10 @@ impl Runnable for Instruction {
             Instruction::Call(op) => op.run(ip, s).context("Failed to run `call` instruction"),
             Instruction::Ret(op) => op.run(ip, s).context("Failed to run `ret` instruction"),
             Instruction::ResV(op) => op.run(ip, s).context("Failed to run `res_v` instruction"),
-            Instruction::PopCopy(op) => op.run(ip, s).context("Failed to run `pop_copy` instruction"),
+            Instruction::PopCopy(op) => op
+                .run(ip, s)
+                .context("Failed to run `pop_copy` instruction"),
+            Instruction::Goto(op) => op.run(ip, s).context("Failed to run `goto` instruction"),
         }
     }
 }
@@ -79,8 +85,7 @@ impl Runnable for Ret {
             .get_instruction_pointer_at_offset(self.ip_offset)
             .context("Failed to get return address")?;
 
-        s
-            .truncate(self.shrink_offset)
+        s.truncate(self.shrink_offset)
             .context("Failed to resize stack")?;
 
         Ok(RunStatus::ContinueTo(initial_offset))
@@ -102,14 +107,20 @@ impl Runnable for ResV {
 impl Runnable for PopCopy {
     fn run(&self, _ip: u32, s: &mut Stack) -> Result<RunStatus> {
         let PopCopy(offset) = self;
-    
+
         let v = s.pop().context("Failed to get value to copy")?;
 
-        s
-            .replace(*offset , v)
+        s.replace(*offset, v)
             .context("Failed to replace stack value")?;
-        
+
         Ok(RunStatus::ContinueToNext)
+    }
+}
+
+impl Runnable for Goto {
+    fn run(&self, _ip: u32, _s: &mut Stack) -> Result<RunStatus> {
+        let dest = self.0;
+        Ok(RunStatus::ContinueTo(dest))
     }
 }
 

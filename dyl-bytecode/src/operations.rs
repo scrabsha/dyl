@@ -247,6 +247,45 @@ impl Display for Goto {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct CondJmp {
+    pub negative_addr: u32,
+    pub null_addr: u32,
+    pub positive_addr: u32,
+}
+
+impl Operation for CondJmp {
+    const ID: usize = next_id![Goto];
+    const SIZE: usize = 13;
+    const DISPLAY_NAME: &'static str = "cond_branch";
+
+    fn decode(input: &[u8]) -> Result<(Self, &[u8])> {
+        let (negative_addr, tail) =
+            pump_four(input).context("Failed to get negative branch address")?;
+        let (null_addr, tail) = pump_four(tail).context("Failed to get null branch address")?;
+        let (positive_addr, tail) =
+            pump_four(tail).context("Failed to get positive branch address")?;
+
+        let instr = CondJmp {
+            negative_addr,
+            null_addr,
+            positive_addr,
+        };
+
+        Ok((instr, tail))
+    }
+}
+
+impl Display for CondJmp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(
+            f,
+            "cond_jmp {}, {}, {}",
+            self.negative_addr, self.negative_addr, self.positive_addr
+        )
+    }
+}
+
 pub(crate) fn pump_one(input: &[u8]) -> Result<(u8, &[u8])> {
     match input {
         [fst, rest @ ..] => Ok((*fst, rest)),

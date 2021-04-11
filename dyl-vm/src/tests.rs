@@ -56,6 +56,11 @@ macro_rules! generate_bytecode {
         generate_bytecode! { @internal($acc, $val + 1) { $( $tail )* } }
     };
 
+    (@internal($acc:ident, $val:expr) { cond_jmp $neg:ident $null:ident $pos:ident $( $tail:tt )* } ) => {
+        $acc.push(dyl_bytecode::Instruction::cond_jmp($neg, $null, $pos));
+        generate_bytecode! { @internal($acc, $val + 1) { $( $tail )* } }
+    };
+
     ( $( $tail:tt )* ) => {{
         let mut acc = Vec::new();
         generate_bytecode! { @internal(acc, 0) { $( $tail )* } };
@@ -241,5 +246,47 @@ test_bytecode_execution! {
             f_stop
         NEXT:
             goto PREV
+    } = Ok(Value::Integer(42)),
+}
+
+test_bytecode_execution! {
+    simple_if_then_else :: {
+            res_v 3
+
+            push_i 0
+            push_i 1
+            call MAYBE_ADD
+
+            push_i -1
+            call MAYBE_ADD
+
+            push_i 0
+            call MAYBE_ADD
+
+            f_stop
+
+        MAYBE_ADD:
+            push_cpy 2
+            push_cpy 2
+            cond_jmp NEG NULL POS
+
+        NEG:
+            push_i 39
+            add_i
+            goto MAYBE_ADD_END
+
+        NULL:
+            push_i 2
+            add_i
+            goto MAYBE_ADD_END
+
+        POS:
+            push_i 1
+            add_i
+            goto MAYBE_ADD_END
+
+        MAYBE_ADD_END:
+            pop_cpy 4
+            ret 3 0
     } = Ok(Value::Integer(42)),
 }

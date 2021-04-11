@@ -1,11 +1,13 @@
 use anyhow::{Context, Result};
 
 use dyl_bytecode::{
-    operations::{AddI, Call, FStop, Goto, PopCopy, PushCopy, PushI, ResV, Ret},
+    operations::{AddI, Call, CondJmp, FStop, Goto, PopCopy, PushCopy, PushI, ResV, Ret},
     Instruction,
 };
 
 use crate::{interpreter::Stack, value::Value};
+
+use std::cmp::Ordering;
 
 pub(crate) trait Runnable {
     fn run(&self, ip: u32, s: &mut Stack) -> Result<RunStatus>;
@@ -27,6 +29,9 @@ impl Runnable for Instruction {
                 .run(ip, s)
                 .context("Failed to run `pop_copy` instruction"),
             Instruction::Goto(op) => op.run(ip, s).context("Failed to run `goto` instruction"),
+            Instruction::CondJmp(op) => op
+                .run(ip, s)
+                .context("Failed to run `cond_jmp` instruction"),
         }
     }
 }
@@ -121,6 +126,20 @@ impl Runnable for Goto {
     fn run(&self, _ip: u32, _s: &mut Stack) -> Result<RunStatus> {
         let dest = self.0;
         Ok(RunStatus::ContinueTo(dest))
+    }
+}
+
+impl Runnable for CondJmp {
+    fn run(&self, _ip: u32, s: &mut Stack) -> Result<RunStatus> {
+        let i = s
+            .pop_integer()
+            .context("Failed to get conditional jump offset")?;
+
+        Ok(match i.cmp(&0) {
+            Ordering::Less => RunStatus::ContinueTo(self.negative_addr),
+            Ordering::Equal => RunStatus::ContinueTo(self.null_addr),
+            Ordering::Greater => RunStatus::ContinueTo(self.positive_addr),
+        })
     }
 }
 

@@ -2,7 +2,7 @@ pub mod decode;
 pub mod display;
 pub mod operations;
 
-use operations::{AddI, Call, FStop, Goto, PopCopy, PushCopy, PushI, ResV, Ret};
+use operations::{AddI, Call, CondJmp, FStop, Goto, PopCopy, PushCopy, PushI, ResV, Ret};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Instruction {
@@ -75,6 +75,13 @@ pub enum Instruction {
     /// ip = ptr
     /// ```
     Goto(Goto),
+
+    /// Pops an integer from the stack, and updates the instruction pointer
+    /// depending on its sign:
+    ///   - if it is negative, then jumps to the first address,
+    ///   - if equals to zero, then thumps to the second address,
+    ///   - otherwise, jumps to the third address.
+    CondJmp(CondJmp),
 }
 
 impl Instruction {
@@ -117,6 +124,15 @@ impl Instruction {
     pub fn goto(addr: u32) -> Instruction {
         Goto(addr).into()
     }
+
+    pub fn cond_jmp(negative_addr: u32, null_addr: u32, positive_addr: u32) -> Instruction {
+        CondJmp {
+            negative_addr,
+            null_addr,
+            positive_addr,
+        }
+        .into()
+    }
 }
 
 macro_rules! impl_from_operation {
@@ -131,4 +147,4 @@ macro_rules! impl_from_operation {
     };
 }
 
-impl_from_operation! { PushI, AddI, FStop, PushCopy, Call, Ret, ResV, PopCopy, Goto }
+impl_from_operation! { PushI, AddI, FStop, PushCopy, Call, Ret, ResV, PopCopy, Goto, CondJmp }

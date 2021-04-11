@@ -251,7 +251,7 @@ pub(crate) fn pump_one(input: &[u8]) -> Result<(u8, &[u8])> {
     match input {
         [fst, rest @ ..] => Ok((*fst, rest)),
         _ => {
-            Err(anyhow!(DecodingError::UnexpectedEOF)).context("Failed to get one byte from input")
+            Err(anyhow!(DecodingError::UnexpectedEof)).context("Failed to get one byte from input")
         }
     }
 }
@@ -262,8 +262,9 @@ fn pump_two(input: &[u8]) -> Result<(u16, &[u8])> {
             let val = u16::from_be_bytes([*fst, *snd]);
             Ok((val, rest))
         }
-        _ => Err(anyhow!(DecodingError::UnexpectedEOF))
-            .context("Failed to get four bytes from input"),
+        _ => {
+            Err(anyhow!(DecodingError::UnexpectedEof)).context("Failed to get two bytes from input")
+        }
     }
 }
 
@@ -273,7 +274,7 @@ fn pump_four(input: &[u8]) -> Result<(u32, &[u8])> {
             let val = u32::from_be_bytes([*fst, *snd, *trd, *fth]);
             Ok((val, rest))
         }
-        _ => Err(anyhow!(DecodingError::UnexpectedEOF))
+        _ => Err(anyhow!(DecodingError::UnexpectedEof))
             .context("Failed to get four bytes from input"),
     }
 }
@@ -281,13 +282,13 @@ fn pump_four(input: &[u8]) -> Result<(u32, &[u8])> {
 #[derive(Clone, Debug, PartialEq)]
 pub enum DecodingError {
     UnknownOpcode(u8),
-    UnexpectedEOF,
+    UnexpectedEof,
 }
 
 impl Display for DecodingError {
     fn fmt(&self, f: &mut Formatter) -> FResult {
         match self {
-            DecodingError::UnexpectedEOF => write!(f, "Unexpected EOF"),
+            DecodingError::UnexpectedEof => write!(f, "Unexpected EOF"),
             DecodingError::UnknownOpcode(id) => write!(f, "Unknown opcode: `{}`", id),
         }
     }

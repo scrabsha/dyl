@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 
 use dyl_bytecode::{
-    operations::{AddI, Call, CondJmp, FStop, Goto, PopCopy, PushCopy, PushI, ResV, Ret},
+    operations::{AddI, Call, CondJmp, FStop, Goto, Neg, PopCopy, PushCopy, PushI, ResV, Ret},
     Instruction,
 };
 
@@ -32,6 +32,7 @@ impl Runnable for Instruction {
             Instruction::CondJmp(op) => op
                 .run(ip, s)
                 .context("Failed to run `cond_jmp` instruction"),
+            Instruction::Neg(op) => op.run(ip, s).context("Failed to run `neg` instruction"),
         }
     }
 }
@@ -140,6 +141,15 @@ impl Runnable for CondJmp {
             Ordering::Equal => RunStatus::ContinueTo(self.null_addr),
             Ordering::Greater => RunStatus::ContinueTo(self.positive_addr),
         })
+    }
+}
+
+impl Runnable for Neg {
+    fn run(&self, _ip: u32, s: &mut Stack) -> Result<RunStatus> {
+        let i = s.pop_integer().context("Failed to get integer to negate")?;
+        s.push_integer(-i);
+
+        Ok(RunStatus::ContinueToNext)
     }
 }
 

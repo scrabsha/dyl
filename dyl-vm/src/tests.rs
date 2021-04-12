@@ -61,6 +61,11 @@ macro_rules! generate_bytecode {
         generate_bytecode! { @internal($acc, $val + 1) { $( $tail )* } }
     };
 
+    (@internal($acc:ident, $val:expr) { neg $( $tail:tt )* } ) => {
+        $acc.push(dyl_bytecode::Instruction::neg());
+        generate_bytecode! { @internal($acc, $val + 1) { $( $tail )* } }
+    };
+
     ( $( $tail:tt )* ) => {{
         let mut acc = Vec::new();
         generate_bytecode! { @internal(acc, 0) { $( $tail )* } };
@@ -288,5 +293,22 @@ test_bytecode_execution! {
         MAYBE_ADD_END:
             pop_cpy 4
             ret 3 0
+    } = Ok(Value::Integer(42)),
+}
+
+test_bytecode_execution! {
+    negate_simple :: {
+        push_i -42
+        neg
+        f_stop
+    } = Ok(Value::Integer(42)),
+}
+
+test_bytecode_execution! {
+    negate_reverses :: {
+        push_i 42
+        neg
+        neg
+        f_stop
     } = Ok(Value::Integer(42)),
 }

@@ -2,7 +2,7 @@ pub mod decode;
 pub mod display;
 pub mod operations;
 
-use operations::{AddI, Call, CondJmp, FStop, Goto, PopCopy, PushCopy, PushI, ResV, Ret};
+use operations::{AddI, Call, CondJmp, FStop, Goto, Neg, PopCopy, PushCopy, PushI, ResV, Ret};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Instruction {
@@ -82,6 +82,14 @@ pub enum Instruction {
     ///   - if equals to zero, then thumps to the second address,
     ///   - otherwise, jumps to the third address.
     CondJmp(CondJmp),
+
+    /// Pops an integer from the stack, negates it, and pushes it.
+    ///
+    /// ```none
+    /// tmp = pop()
+    /// push(-tmp)
+    /// ```
+    Neg(Neg),
 }
 
 impl Instruction {
@@ -133,6 +141,10 @@ impl Instruction {
         }
         .into()
     }
+
+    pub fn neg() -> Instruction {
+        Neg.into()
+    }
 }
 
 macro_rules! impl_from_operation {
@@ -147,4 +159,4 @@ macro_rules! impl_from_operation {
     };
 }
 
-impl_from_operation! { PushI, AddI, FStop, PushCopy, Call, Ret, ResV, PopCopy, Goto, CondJmp }
+impl_from_operation! { PushI, AddI, FStop, PushCopy, Call, Ret, ResV, PopCopy, Goto, CondJmp, Neg }

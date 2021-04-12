@@ -7,7 +7,7 @@ use std::{
 
 use crate::Instruction;
 
-pub(crate) const AVAILABLE_DECODERS: [Decoder; 9] = [
+pub(crate) const AVAILABLE_DECODERS: [Decoder; 11] = [
     PushI::decode_and_wrap,
     AddI::decode_and_wrap,
     FStop::decode_and_wrap,
@@ -17,6 +17,8 @@ pub(crate) const AVAILABLE_DECODERS: [Decoder; 9] = [
     ResV::decode_and_wrap,
     PopCopy::decode_and_wrap,
     Goto::decode_and_wrap,
+    CondJmp::decode_and_wrap,
+    Neg::decode_and_wrap,
 ];
 
 pub(crate) type Decoder = fn(&[u8]) -> Result<(Instruction, usize, &[u8])>;
@@ -283,6 +285,27 @@ impl Display for CondJmp {
             "cond_jmp {}, {}, {}",
             self.negative_addr, self.negative_addr, self.positive_addr
         )
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Neg;
+
+impl Operation for Neg {
+    const ID: usize = next_id![CondJmp];
+    const SIZE: usize = 1;
+    const DISPLAY_NAME: &'static str = "neg";
+
+    fn decode(input: &[u8]) -> Result<(Self, &[u8])> {
+        let instr = Neg;
+
+        Ok((instr, input))
+    }
+}
+
+impl Display for Neg {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "neg")
     }
 }
 

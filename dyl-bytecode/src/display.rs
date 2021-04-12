@@ -17,6 +17,7 @@ impl Display for Instruction {
             Instruction::PopCopy(op) => op.fmt(f),
             Instruction::Goto(op) => op.fmt(f),
             Instruction::CondJmp(op) => op.fmt(f),
+            Instruction::Neg(op) => op.fmt(f),
         }
     }
 }

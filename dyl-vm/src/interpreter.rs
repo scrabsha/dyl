@@ -6,7 +6,6 @@ use crate::runnable::Runnable;
 use crate::{runnable::RunStatus, value::Value};
 
 pub(crate) struct Interpreter {
-    stack: Stack,
     code: Vec<Instruction>,
 }
 
@@ -18,17 +17,15 @@ impl Interpreter {
     }
 
     pub(crate) fn from_instructions(code: Vec<Instruction>) -> Interpreter {
-        let stack = Stack::new();
-        Interpreter { stack, code }
+        Interpreter { code }
     }
 
     pub(crate) fn run(&mut self) -> Result<Value> {
-        let mut ip = 0;
+        let mut state = RunningInterpreterState::new();
 
         let final_value = loop {
-            match self.run_single(ip)? {
-                RunStatus::ContinueToNext => ip += 1,
-                RunStatus::ContinueTo(idx) => ip = idx,
+            match self.run_single(state)? {
+                RunStatus::Continue(new_state) => state = new_state,
                 RunStatus::Stop(val) => break val,
             }
         };
@@ -36,14 +33,50 @@ impl Interpreter {
         Ok(final_value)
     }
 
-    fn run_single(&mut self, ip: u32) -> Result<RunStatus> {
+    fn run_single(&mut self, state: RunningInterpreterState) -> Result<RunStatus> {
         let instr = self
             .code
-            .get(ip as usize)
-            .ok_or_else(|| anyhow!("Failed to read instruction at index `{}`", ip))?
-            .clone();
+            .get(state.ip as usize)
+            .ok_or_else(|| anyhow!("Failed to read instruction at index `{}`", state.ip))?;
 
-        instr.run(ip, &mut self.stack)
+        instr.run(state)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct RunningInterpreterState {
+    ip: u32,
+    stack: Stack,
+}
+
+impl RunningInterpreterState {
+    pub(crate) fn new() -> RunningInterpreterState {
+        let stack = Stack::new();
+        let ip = 0;
+
+        RunningInterpreterState { ip, stack }
+    }
+
+    pub(crate) fn continue_to_next(mut self) -> RunningInterpreterState {
+        self.ip += 1;
+        self
+    }
+
+    pub(crate) fn continue_to(mut self, addr: u32) -> RunningInterpreterState {
+        self.ip = addr;
+        self
+    }
+
+    pub(crate) fn ip(&self) -> u32 {
+        self.ip
+    }
+
+    pub(crate) fn stack(&self) -> &Stack {
+        &self.stack
+    }
+
+    pub(crate) fn stack_mut(&mut self) -> &mut Stack {
+        &mut self.stack
     }
 }
 

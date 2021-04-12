@@ -5,156 +5,182 @@ use dyl_bytecode::{
     Instruction,
 };
 
-use crate::{interpreter::Stack, value::Value};
+use crate::{interpreter::RunningInterpreterState, value::Value};
 
 use std::cmp::Ordering;
 
 pub(crate) trait Runnable {
-    fn run(&self, ip: u32, s: &mut Stack) -> Result<RunStatus>;
+    fn run(&self, state: RunningInterpreterState) -> Result<RunStatus>;
 }
 
 impl Runnable for Instruction {
-    fn run(&self, ip: u32, s: &mut Stack) -> Result<RunStatus> {
+    fn run(&self, state: RunningInterpreterState) -> Result<RunStatus> {
         match self {
-            Instruction::PushI(op) => op.run(ip, s).context("Failed to run `push_i` instruction"),
-            Instruction::AddI(op) => op.run(ip, s).context("Failed to run `add_i` instruction"),
-            Instruction::FStop(op) => op.run(ip, s).context("Failed to run `f_stop`"),
+            Instruction::PushI(op) => op.run(state).context("Failed to run `push_i` instruction"),
+            Instruction::AddI(op) => op.run(state).context("Failed to run `add_i` instruction"),
+            Instruction::FStop(op) => op.run(state).context("Failed to run `f_stop`"),
             Instruction::PushCopy(op) => op
-                .run(ip, s)
+                .run(state)
                 .context("Failed to run `push_copy` instruction"),
-            Instruction::Call(op) => op.run(ip, s).context("Failed to run `call` instruction"),
-            Instruction::Ret(op) => op.run(ip, s).context("Failed to run `ret` instruction"),
-            Instruction::ResV(op) => op.run(ip, s).context("Failed to run `res_v` instruction"),
+            Instruction::Call(op) => op.run(state).context("Failed to run `call` instruction"),
+            Instruction::Ret(op) => op.run(state).context("Failed to run `ret` instruction"),
+            Instruction::ResV(op) => op.run(state).context("Failed to run `res_v` instruction"),
             Instruction::PopCopy(op) => op
-                .run(ip, s)
+                .run(state)
                 .context("Failed to run `pop_copy` instruction"),
-            Instruction::Goto(op) => op.run(ip, s).context("Failed to run `goto` instruction"),
+            Instruction::Goto(op) => op.run(state).context("Failed to run `goto` instruction"),
             Instruction::CondJmp(op) => op
-                .run(ip, s)
+                .run(state)
                 .context("Failed to run `cond_jmp` instruction"),
-            Instruction::Neg(op) => op.run(ip, s).context("Failed to run `neg` instruction"),
+            Instruction::Neg(op) => op.run(state).context("Failed to run `neg` instruction"),
         }
     }
 }
 
 impl Runnable for PushI {
-    fn run(&self, _ip: u32, s: &mut Stack) -> Result<RunStatus> {
+    fn run(&self, mut state: RunningInterpreterState) -> Result<RunStatus> {
         let n = self.0;
-        s.push_integer(n);
+        state.stack_mut().push_integer(n);
 
-        Ok(RunStatus::ContinueToNext)
+        Ok(state.continue_to_next().into())
     }
 }
 
 impl Runnable for AddI {
-    fn run(&self, _ip: u32, s: &mut Stack) -> Result<RunStatus> {
-        let lhs = s
+    fn run(&self, mut state: RunningInterpreterState) -> Result<RunStatus> {
+        let lhs = state
+            .stack_mut()
             .pop_integer()
             .context("Failed to get integer left-hand-side-value")?;
-        let rhs = s
+        let rhs = state
+            .stack_mut()
             .pop_integer()
             .context("Failed to get integer right-hand-side value")?;
 
-        s.push_integer(lhs + rhs);
+        state.stack_mut().push_integer(lhs + rhs);
 
-        Ok(RunStatus::ContinueToNext)
+        Ok(state.continue_to_next().into())
     }
 }
 
 impl Runnable for FStop {
-    fn run(&self, _ip: u32, s: &mut Stack) -> Result<RunStatus> {
-        let final_value = s.full_stop_value()?.clone();
+    fn run(&self, state: RunningInterpreterState) -> Result<RunStatus> {
+        let final_value = state
+            .stack()
+            .full_stop_value()
+            .context("Failed to get final value")?
+            .clone();
 
         Ok(RunStatus::Stop(final_value))
     }
 }
 
 impl Runnable for PushCopy {
-    fn run(&self, _ip: u32, s: &mut Stack) -> Result<RunStatus> {
+    fn run(&self, mut state: RunningInterpreterState) -> Result<RunStatus> {
         let idx = self.0;
-        s.copy_value(idx)?;
+        state.stack_mut().copy_value(idx)?;
 
-        Ok(RunStatus::ContinueToNext)
+        Ok(state.continue_to_next().into())
     }
 }
 
 impl Runnable for Call {
-    fn run(&self, ip: u32, s: &mut Stack) -> Result<RunStatus> {
-        s.push_instruction_pointer(ip + 1);
-        Ok(RunStatus::ContinueTo(self.0))
+    fn run(&self, mut state: RunningInterpreterState) -> Result<RunStatus> {
+        let jump_addr = self.0;
+        let next_addr = state.ip() + 1;
+        state.stack_mut().push_instruction_pointer(next_addr);
+        Ok(state.continue_to(jump_addr).into())
     }
 }
 
 impl Runnable for Ret {
-    fn run(&self, _ip: u32, s: &mut Stack) -> Result<RunStatus> {
-        let initial_offset = s
+    fn run(&self, mut state: RunningInterpreterState) -> Result<RunStatus> {
+        let initial_offset = state
+            .stack_mut()
             .get_instruction_pointer_at_offset(self.ip_offset)
             .context("Failed to get return address")?;
 
-        s.truncate(self.shrink_offset)
+        state
+            .stack_mut()
+            .truncate(self.shrink_offset)
             .context("Failed to resize stack")?;
 
-        Ok(RunStatus::ContinueTo(initial_offset))
+        Ok(state.continue_to(initial_offset).into())
     }
 }
 
 impl Runnable for ResV {
-    fn run(&self, _ip: u32, s: &mut Stack) -> Result<RunStatus> {
+    fn run(&self, mut state: RunningInterpreterState) -> Result<RunStatus> {
         let ResV(offset) = self;
 
         for _ in 0..*offset {
-            s.push_integer(0);
+            state.stack_mut().push_integer(0);
         }
 
-        Ok(RunStatus::ContinueToNext)
+        Ok(state.continue_to_next().into())
     }
 }
 
 impl Runnable for PopCopy {
-    fn run(&self, _ip: u32, s: &mut Stack) -> Result<RunStatus> {
+    fn run(&self, mut state: RunningInterpreterState) -> Result<RunStatus> {
         let PopCopy(offset) = self;
 
-        let v = s.pop().context("Failed to get value to copy")?;
+        let v = state
+            .stack_mut()
+            .pop()
+            .context("Failed to get value to copy")?;
 
-        s.replace(*offset, v)
+        state
+            .stack_mut()
+            .replace(*offset, v)
             .context("Failed to replace stack value")?;
 
-        Ok(RunStatus::ContinueToNext)
+        Ok(state.continue_to_next().into())
     }
 }
 
 impl Runnable for Goto {
-    fn run(&self, _ip: u32, _s: &mut Stack) -> Result<RunStatus> {
+    fn run(&self, state: RunningInterpreterState) -> Result<RunStatus> {
         let dest = self.0;
-        Ok(RunStatus::ContinueTo(dest))
+        Ok(state.continue_to(dest).into())
     }
 }
 
 impl Runnable for CondJmp {
-    fn run(&self, _ip: u32, s: &mut Stack) -> Result<RunStatus> {
-        let i = s
+    fn run(&self, mut state: RunningInterpreterState) -> Result<RunStatus> {
+        let i = state
+            .stack_mut()
             .pop_integer()
             .context("Failed to get conditional jump offset")?;
 
         Ok(match i.cmp(&0) {
-            Ordering::Less => RunStatus::ContinueTo(self.negative_addr),
-            Ordering::Equal => RunStatus::ContinueTo(self.null_addr),
-            Ordering::Greater => RunStatus::ContinueTo(self.positive_addr),
-        })
+            Ordering::Less => state.continue_to(self.negative_addr),
+            Ordering::Equal => state.continue_to(self.null_addr),
+            Ordering::Greater => state.continue_to(self.positive_addr),
+        }
+        .into())
     }
 }
 
 impl Runnable for Neg {
-    fn run(&self, _ip: u32, s: &mut Stack) -> Result<RunStatus> {
-        let i = s.pop_integer().context("Failed to get integer to negate")?;
-        s.push_integer(-i);
+    fn run(&self, mut state: RunningInterpreterState) -> Result<RunStatus> {
+        let i = state
+            .stack_mut()
+            .pop_integer()
+            .context("Failed to get integer to negate")?;
+        state.stack_mut().push_integer(-i);
 
-        Ok(RunStatus::ContinueToNext)
+        Ok(state.continue_to_next().into())
     }
 }
 
 pub(crate) enum RunStatus {
-    ContinueToNext,
-    ContinueTo(u32),
+    Continue(RunningInterpreterState),
     Stop(Value),
+}
+
+impl From<RunningInterpreterState> for RunStatus {
+    fn from(state: RunningInterpreterState) -> RunStatus {
+        RunStatus::Continue(state)
+    }
 }

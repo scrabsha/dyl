@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "dyl-bytecode",
+    "dyl-compiler",
     "dyl-vm",
 ]

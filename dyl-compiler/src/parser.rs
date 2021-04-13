@@ -1,11 +1,11 @@
 use nom::*;
 
-use nom::character::complete::digit1;
+use nom::character::complete::{digit1, multispace0};
 
 use crate::ast::{Addition, ExprKind, Integer};
 
 named!(integer<&str, ExprKind>, map!(
-    digit1,
+    delimited!(multispace0, digit1, multispace0),
     |i| ExprKind::integer(i.parse().unwrap())
 ));
 
@@ -35,7 +35,7 @@ mod integer {
     #[test]
     fn integer_with_tail() {
         let left = integer("101 !");
-        let right = Ok((" !", ExprKind::integer(101)));
+        let right = Ok(("!", ExprKind::integer(101)));
 
         assert_eq!(left, right);
     }
@@ -44,6 +44,14 @@ mod integer {
     fn integer_failing_when_not_digit() {
         assert!(integer("abc").is_err());
         assert!(integer("").is_err());
+    }
+
+    #[test]
+    fn integer_eats_whitespaces_before_and_after() {
+        let left = integer(" 42 ");
+        let right = Ok(("", ExprKind::integer(42)));
+
+        assert_eq!(left, right);
     }
 }
 

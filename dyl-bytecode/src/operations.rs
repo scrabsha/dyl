@@ -39,7 +39,7 @@ pub(crate) trait Operation: Sized + Into<Instruction> {
 
 macro_rules! next_id {
     ($t:ident) => {
-        <$t as Operation>::ID
+        <$t as Operation>::ID + 1
     };
 }
 
@@ -357,3 +357,32 @@ impl Display for DecodingError {
 }
 
 impl Error for DecodingError {}
+
+#[cfg(test)]
+mod id_tests {
+    use super::*;
+
+    macro_rules! assert_correct_id {
+        ($ty:ident) => {
+            assert_eq!(
+                AVAILABLE_DECODERS[$ty::ID] as usize,
+                $ty::decode_and_wrap as usize
+            );
+        };
+    }
+
+    #[test]
+    fn decoder_id_matches_operation_id() {
+        assert_correct_id!(PushI);
+        assert_correct_id!(AddI);
+        assert_correct_id!(FStop);
+        assert_correct_id!(PushCopy);
+        assert_correct_id!(Call);
+        assert_correct_id!(Ret);
+        assert_correct_id!(ResV);
+        assert_correct_id!(PopCopy);
+        assert_correct_id!(Goto);
+        assert_correct_id!(CondJmp);
+        assert_correct_id!(Neg);
+    }
+}

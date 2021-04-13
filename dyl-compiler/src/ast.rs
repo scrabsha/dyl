@@ -4,6 +4,16 @@ pub(crate) enum ExprKind {
     Integer(Integer),
 }
 
+impl ExprKind {
+    pub(crate) fn addition(lhs: ExprKind, rhs: ExprKind) -> ExprKind {
+        ExprKind::Addition(Addition::new(lhs, rhs))
+    }
+
+    pub(crate) fn integer(value: i32) -> ExprKind {
+        ExprKind::Integer(Integer::new(value))
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Addition(Box<(ExprKind, ExprKind)>);
 

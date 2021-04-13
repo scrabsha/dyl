@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 dyl-bytecode = { path = "../dyl-bytecode" }
 anyhow = "1.0"
+nom = "6.1"

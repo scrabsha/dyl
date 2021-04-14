@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 
 use std::{
     error::Error,
@@ -34,6 +34,18 @@ pub(crate) trait Operation: Sized + Into<Instruction> {
         Self::decode(input)
             .with_context(|| format!("Failed to decode `{}`", Self::DISPLAY_NAME))
             .map(|(op, tail)| (op.into(), Self::SIZE, tail))
+    }
+
+    fn decode_single_with_opcode(input: &[u8]) -> Result<Self> {
+        let (opcode, tail) = pump_one(input).context("Failed to get opcode value")?;
+        ensure!(opcode == Self::ID as u8, "Incorrect opcode");
+
+        let (instr, tail) =
+            Self::decode(tail).context("Failed to decode instruction parameters")?;
+
+        ensure!(tail.is_empty(), "Some bytes have not been consumed");
+
+        Ok(instr)
     }
 
     fn encode(&self, encoder: &mut Vec<u8>);
@@ -457,6 +469,23 @@ mod id_tests {
 }
 
 #[cfg(test)]
+macro_rules! test_symmetry {
+    ($operation:ident, $instr:expr , $bytecode:expr $(,)? ) => {
+        #[test]
+        fn symmetry() {
+            assert_eq!(
+                $operation::decode_single_with_opcode(&encode($instr)).unwrap(),
+                $instr
+            );
+            assert_eq!(
+                encode($operation::decode_single_with_opcode(&$bytecode).unwrap()),
+                $bytecode
+            );
+        }
+    };
+}
+
+#[cfg(test)]
 fn encode(instr: impl Operation) -> Vec<u8> {
     let mut tmp = Vec::new();
     instr.encode(&mut tmp);
@@ -475,6 +504,10 @@ mod push_i {
 
         assert_eq!(left, right);
     }
+
+    test_symmetry! {
+        PushI, PushI(42), [0, 0, 0, 0, 42],
+    }
 }
 
 #[cfg(test)]
@@ -488,6 +521,10 @@ mod add_i {
         let right = [1];
 
         assert_eq!(left, right);
+    }
+
+    test_symmetry! {
+        AddI, AddI, [1],
     }
 }
 
@@ -503,6 +540,10 @@ mod f_stop {
 
         assert_eq!(left, right);
     }
+
+    test_symmetry! {
+        FStop, FStop, [2],
+    }
 }
 
 #[cfg(test)]
@@ -517,6 +558,10 @@ mod push_copy {
 
         assert_eq!(left, right);
     }
+
+    test_symmetry! {
+        PushCopy, PushCopy(300), [3, 1, 44],
+    }
 }
 
 #[cfg(test)]
@@ -530,6 +575,10 @@ mod call {
         let right = [4, 0, 0, 0, 247];
 
         assert_eq!(left, right);
+    }
+
+    test_symmetry! {
+        Call, Call(247), [4, 0, 0, 0, 247],
     }
 }
 
@@ -548,6 +597,12 @@ mod ret {
 
         assert_eq!(left, right);
     }
+
+    test_symmetry! {
+        Ret,
+        Ret { shrink_offset: 2, ip_offset: 4 },
+        [5, 0, 2, 0, 4],
+    }
 }
 
 #[cfg(test)]
@@ -561,6 +616,10 @@ mod res_v {
         let right = [6, 0, 22];
 
         assert_eq!(left, right);
+    }
+
+    test_symmetry! {
+        ResV, ResV(101), [6, 0, 101],
     }
 }
 
@@ -576,6 +635,10 @@ mod pop_cpy {
 
         assert_eq!(left, right);
     }
+
+    test_symmetry! {
+        PopCopy, PopCopy(13), [7, 0, 32],
+    }
 }
 
 #[cfg(test)]
@@ -589,6 +652,10 @@ mod goto {
         let right = [8, 0, 0, 1, 188];
 
         assert_eq!(left, right);
+    }
+
+    test_symmetry! {
+        Goto, Goto(10), [8, 0, 0, 0, 10],
     }
 }
 
@@ -608,6 +675,12 @@ mod cond_jmp {
 
         assert_eq!(left, right);
     }
+
+    test_symmetry! {
+        CondJmp,
+        CondJmp { negative_addr: 101, null_addr: 69, positive_addr: 42 },
+        [9, 0, 0, 0, 101, 0, 0, 0, 69, 0, 0, 0, 42],
+    }
 }
 
 #[cfg(test)]
@@ -621,5 +694,9 @@ mod neg {
         let right = [10];
 
         assert_eq!(left, right);
+    }
+
+    test_symmetry! {
+        Neg, Neg, [10],
     }
 }

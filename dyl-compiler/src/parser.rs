@@ -2,7 +2,35 @@ use nom::*;
 
 use nom::character::complete::{digit1, multispace0};
 
+use anyhow::{ensure, Error};
+
+use std::primitive::str as std_str;
+
 use crate::ast::{Addition, ExprKind, Integer};
+
+pub(crate) fn parse_input(program: &std_str) -> anyhow::Result<ExprKind> {
+    addition(program)
+        .map_err(|e| own_nom_err(e))
+        .map_err(Error::new)
+        .and_then(|(tail, expr)| {
+            ensure!(tail.is_empty(), "Parser did not consume the whole program");
+            Ok(expr)
+        })
+}
+
+fn own_nom_err(err: Err<nom::error::Error<&std_str>>) -> Err<nom::error::Error<String>> {
+    match err {
+        Err::Error(e) => Err::Error(own_nom_error(e)),
+        Err::Failure(f) => Err::Failure(own_nom_error(f)),
+        Err::Incomplete(needed) => Err::Incomplete(needed),
+    }
+}
+
+fn own_nom_error(err: nom::error::Error<&std_str>) -> nom::error::Error<String> {
+    let nom::error::Error { input, code } = err;
+    let input: String = input.to_owned();
+    nom::error::Error { input, code }
+}
 
 named!(integer<&str, ExprKind>, map!(
     delimited!(multispace0, digit1, multispace0),

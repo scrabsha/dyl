@@ -2,6 +2,12 @@ use dyl_bytecode::Instruction;
 
 use crate::ast::{Addition, ExprKind, Integer};
 
+pub(crate) fn lower_ast(ast: &ExprKind) -> Vec<Instruction> {
+    let mut tmp = Vec::new();
+    ast.lower(&mut tmp);
+    tmp
+}
+
 trait Lowerable {
     fn lower(&self, collector: &mut Vec<Instruction>);
 }

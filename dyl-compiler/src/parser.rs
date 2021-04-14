@@ -1,14 +1,18 @@
-use nom::*;
+use nom::{
+    bytes::complete::tag,
+    character::complete::{digit1, multispace0},
+    combinator::map,
+    error::Error as NomError,
+    multi::fold_many1,
+    sequence::{delimited, tuple},
+    Err, IResult,
+};
 
-use nom::character::complete::{digit1, multispace0};
+use anyhow::{ensure, Error, Result as AnyResult};
 
-use anyhow::{ensure, Error};
+use crate::ast::ExprKind;
 
-use std::primitive::str as std_str;
-
-use crate::ast::{Addition, ExprKind, Integer};
-
-pub(crate) fn parse_input(program: &std_str) -> anyhow::Result<ExprKind> {
+pub(crate) fn parse_input(program: &str) -> AnyResult<ExprKind> {
     addition(program)
         .map_err(|e| own_nom_err(e))
         .map_err(Error::new)
@@ -18,7 +22,7 @@ pub(crate) fn parse_input(program: &std_str) -> anyhow::Result<ExprKind> {
         })
 }
 
-fn own_nom_err(err: Err<nom::error::Error<&std_str>>) -> Err<nom::error::Error<String>> {
+fn own_nom_err(err: Err<nom::error::Error<&str>>) -> Err<nom::error::Error<String>> {
     match err {
         Err::Error(e) => Err::Error(own_nom_error(e)),
         Err::Failure(f) => Err::Failure(own_nom_error(f)),
@@ -26,27 +30,25 @@ fn own_nom_err(err: Err<nom::error::Error<&std_str>>) -> Err<nom::error::Error<S
     }
 }
 
-fn own_nom_error(err: nom::error::Error<&std_str>) -> nom::error::Error<String> {
-    let nom::error::Error { input, code } = err;
+fn own_nom_error(err: NomError<&str>) -> NomError<String> {
+    let NomError { input, code } = err;
     let input: String = input.to_owned();
-    nom::error::Error { input, code }
+    NomError { input, code }
 }
 
-named!(integer<&str, ExprKind>, map!(
-    delimited!(multispace0, digit1, multispace0),
-    |i| ExprKind::integer(i.parse().unwrap())
-));
+fn integer(input: &str) -> IResult<&str, ExprKind> {
+    map(delimited(multispace0, digit1, multispace0), |i: &str| {
+        ExprKind::integer(i.parse().unwrap())
+    })(input)
+}
 
-named!(addition<&str, ExprKind>, do_parse!(
-    first: integer >>
-    rest: fold_many1!(
-        complete!(tuple!(tag!("+"), integer)),
-        first,
-        |left, (_, right)| {
-            ExprKind::Addition(Addition::new(left, right))
-        }
-    ) >> (rest)
-));
+fn addition(input: &str) -> IResult<&str, ExprKind> {
+    let (tail, first) = integer(input)?;
+
+    fold_many1(tuple((tag("+"), integer)), first, |left, (_, right)| {
+        ExprKind::addition(left, right)
+    })(tail)
+}
 
 #[cfg(test)]
 mod integer {

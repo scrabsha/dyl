@@ -469,6 +469,23 @@ mod id_tests {
 }
 
 #[cfg(test)]
+macro_rules! test_encoding {
+    ( $( $instr:expr => $bytecode:expr )* $(,)? ) => {
+        #[test]
+        fn encoding() {
+            $(
+                assert_eq!(encode($instr), $bytecode);
+
+                let mut generated_bytecode = Vec::new();
+                Instruction::from($instr).encode(&mut generated_bytecode);
+
+                assert_eq!(generated_bytecode, $bytecode);
+            )*
+        }
+    };
+}
+
+#[cfg(test)]
 macro_rules! test_symmetry {
     ($operation:ident, $instr:expr , $bytecode:expr $(,)? ) => {
         #[test]
@@ -509,13 +526,8 @@ fn encode(instr: impl Operation) -> Vec<u8> {
 mod push_i {
     use super::*;
 
-    #[test]
-    fn encoding() {
-        let instr = PushI(42);
-        let left = encode(instr);
-        let right = [0, 0, 0, 0, 42];
-
-        assert_eq!(left, right);
+    test_encoding! {
+        PushI(42) => [0, 0, 0, 0, 42],
     }
 
     test_symmetry! {
@@ -532,13 +544,8 @@ mod push_i {
 mod add_i {
     use super::*;
 
-    #[test]
-    fn encoding() {
-        let instr = AddI;
-        let left = encode(instr);
-        let right = [1];
-
-        assert_eq!(left, right);
+    test_encoding! {
+        AddI => [1],
     }
 
     test_symmetry! {
@@ -554,13 +561,8 @@ mod add_i {
 mod f_stop {
     use super::*;
 
-    #[test]
-    fn encoding() {
-        let instr = FStop;
-        let left = encode(instr);
-        let right = [2];
-
-        assert_eq!(left, right);
+    test_encoding! {
+        FStop => [2],
     }
 
     test_symmetry! {
@@ -576,13 +578,8 @@ mod f_stop {
 mod push_copy {
     use super::*;
 
-    #[test]
-    fn encoding() {
-        let instr = PushCopy(300);
-        let left = encode(instr);
-        let right = [3, 1, 44];
-
-        assert_eq!(left, right);
+    test_encoding! {
+        PushCopy(300) => [3, 1, 44]
     }
 
     test_symmetry! {
@@ -599,13 +596,8 @@ mod push_copy {
 mod call {
     use super::*;
 
-    #[test]
-    fn encoding() {
-        let instr = Call(247);
-        let left = encode(instr);
-        let right = [4, 0, 0, 0, 247];
-
-        assert_eq!(left, right);
+    test_encoding! {
+        Call(247) => [4, 0, 0, 0, 247],
     }
 
     test_symmetry! {
@@ -622,16 +614,8 @@ mod call {
 mod ret {
     use super::*;
 
-    #[test]
-    fn encoding() {
-        let instr = Ret {
-            shrink_offset: 2,
-            ip_offset: 4,
-        };
-        let left = encode(instr);
-        let right = [5, 0, 2, 0, 4];
-
-        assert_eq!(left, right);
+    test_encoding! {
+        Ret { shrink_offset: 2, ip_offset: 4 } => [5, 0, 2, 0, 4],
     }
 
     test_symmetry! {
@@ -650,13 +634,8 @@ mod ret {
 mod res_v {
     use super::*;
 
-    #[test]
-    fn encoding() {
-        let instr = ResV(22);
-        let left = encode(instr);
-        let right = [6, 0, 22];
-
-        assert_eq!(left, right);
+    test_encoding! {
+        ResV(22) => [6, 0, 22],
     }
 
     test_symmetry! {
@@ -672,13 +651,8 @@ mod res_v {
 mod pop_cpy {
     use super::*;
 
-    #[test]
-    fn encoding() {
-        let instr = PopCopy(32);
-        let left = encode(instr);
-        let right = [7, 0, 32];
-
-        assert_eq!(left, right);
+    test_encoding! {
+        PopCopy(32) => [7, 0, 32],
     }
 
     test_symmetry! {
@@ -695,13 +669,8 @@ mod pop_cpy {
 mod goto {
     use super::*;
 
-    #[test]
-    fn encoding() {
-        let instr = Goto(444);
-        let left = encode(instr);
-        let right = [8, 0, 0, 1, 188];
-
-        assert_eq!(left, right);
+    test_encoding! {
+        Goto(444) => [8, 0, 0, 1, 188],
     }
 
     test_symmetry! {
@@ -718,17 +687,10 @@ mod goto {
 mod cond_jmp {
     use super::*;
 
-    #[test]
-    fn encoding() {
-        let instr = CondJmp {
-            negative_addr: 101,
-            null_addr: 69,
-            positive_addr: 13,
-        };
-        let left = encode(instr);
-        let right = [9, 0, 0, 0, 101, 0, 0, 0, 69, 0, 0, 0, 13];
-
-        assert_eq!(left, right);
+    test_encoding! {
+        CondJmp { negative_addr: 101, null_addr: 69, positive_addr: 13 }
+        =>
+        [9, 0, 0, 0, 101, 0, 0, 0, 69, 0, 0, 0, 13],
     }
 
     test_symmetry! {
@@ -746,13 +708,8 @@ mod cond_jmp {
 mod neg {
     use super::*;
 
-    #[test]
-    fn encoding() {
-        let instr = Neg;
-        let left = encode(instr);
-        let right = [10];
-
-        assert_eq!(left, right);
+    test_encoding! {
+        Neg => [10],
     }
 
     test_symmetry! {

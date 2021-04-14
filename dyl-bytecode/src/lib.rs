@@ -1,5 +1,6 @@
 pub mod decode;
 pub mod display;
+pub mod encode;
 pub mod operations;
 
 use operations::{AddI, Call, CondJmp, FStop, Goto, Neg, PopCopy, PushCopy, PushI, ResV, Ret};

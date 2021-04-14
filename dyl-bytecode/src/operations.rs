@@ -347,8 +347,8 @@ impl Display for CondJmp {
     fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
         write!(
             f,
-            "cond_jmp {}, {}, {}",
-            self.negative_addr, self.negative_addr, self.positive_addr
+            "cond_jmp {} {} {}",
+            self.negative_addr, self.null_addr, self.positive_addr
         )
     }
 }
@@ -486,6 +486,19 @@ macro_rules! test_symmetry {
 }
 
 #[cfg(test)]
+macro_rules! test_display {
+    ( $( $instr:expr => $display:literal ),* $(,)? ) => {
+        #[test]
+        fn display() {
+            $(
+                assert_eq!($instr.to_string(), $display);
+                assert_eq!(Instruction::from($instr).to_string(), $display);
+            )*
+        }
+    };
+}
+
+#[cfg(test)]
 fn encode(instr: impl Operation) -> Vec<u8> {
     let mut tmp = Vec::new();
     instr.encode(&mut tmp);
@@ -508,6 +521,11 @@ mod push_i {
     test_symmetry! {
         PushI, PushI(42), [0, 0, 0, 0, 42],
     }
+
+    test_display! {
+        PushI(42) => "push_i 42",
+        PushI(101) => "push_i 101",
+    }
 }
 
 #[cfg(test)]
@@ -525,6 +543,10 @@ mod add_i {
 
     test_symmetry! {
         AddI, AddI, [1],
+    }
+
+    test_display! {
+        AddI => "add_i",
     }
 }
 
@@ -544,6 +566,10 @@ mod f_stop {
     test_symmetry! {
         FStop, FStop, [2],
     }
+
+    test_display! {
+        FStop => "f_stop",
+    }
 }
 
 #[cfg(test)]
@@ -562,6 +588,11 @@ mod push_copy {
     test_symmetry! {
         PushCopy, PushCopy(300), [3, 1, 44],
     }
+
+    test_display! {
+        PushCopy(3) => "push_copy 3",
+        PushCopy(11) => "push_copy 11",
+    }
 }
 
 #[cfg(test)]
@@ -579,6 +610,11 @@ mod call {
 
     test_symmetry! {
         Call, Call(247), [4, 0, 0, 0, 247],
+    }
+
+    test_display! {
+        Call(1010) => "call 1010",
+        Call(12) => "call 12",
     }
 }
 
@@ -603,6 +639,11 @@ mod ret {
         Ret { shrink_offset: 2, ip_offset: 4 },
         [5, 0, 2, 0, 4],
     }
+
+    test_display! {
+        Ret { shrink_offset: 100, ip_offset: 34 } => "ret 100 34",
+        Ret { shrink_offset: 10, ip_offset: 4 } => "ret 10 4",
+    }
 }
 
 #[cfg(test)]
@@ -620,6 +661,10 @@ mod res_v {
 
     test_symmetry! {
         ResV, ResV(101), [6, 0, 101],
+    }
+
+    test_display! {
+        ResV(10) => "res_v 10"
     }
 }
 
@@ -639,6 +684,11 @@ mod pop_cpy {
     test_symmetry! {
         PopCopy, PopCopy(13), [7, 0, 32],
     }
+
+    test_display! {
+        PopCopy(12) => "pop_copy 12",
+        PopCopy(2) => "pop_copy 2",
+    }
 }
 
 #[cfg(test)]
@@ -656,6 +706,11 @@ mod goto {
 
     test_symmetry! {
         Goto, Goto(10), [8, 0, 0, 0, 10],
+    }
+
+    test_display! {
+        Goto(1337) => "goto 1337",
+        Goto(2503) => "goto 2503",
     }
 }
 
@@ -681,6 +736,10 @@ mod cond_jmp {
         CondJmp { negative_addr: 101, null_addr: 69, positive_addr: 42 },
         [9, 0, 0, 0, 101, 0, 0, 0, 69, 0, 0, 0, 42],
     }
+
+    test_display! {
+        CondJmp { negative_addr: 1221, null_addr: 92, positive_addr: 218 } => "cond_jmp 1221 92 218",
+    }
 }
 
 #[cfg(test)]
@@ -698,5 +757,9 @@ mod neg {
 
     test_symmetry! {
         Neg, Neg, [10],
+    }
+
+    test_display! {
+        Neg => "neg",
     }
 }

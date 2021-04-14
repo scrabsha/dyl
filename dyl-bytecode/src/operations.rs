@@ -35,6 +35,8 @@ pub(crate) trait Operation: Sized + Into<Instruction> {
             .with_context(|| format!("Failed to decode `{}`", Self::DISPLAY_NAME))
             .map(|(op, tail)| (op.into(), Self::SIZE, tail))
     }
+
+    fn encode(&self, encoder: &mut Vec<u8>);
 }
 
 macro_rules! next_id {
@@ -57,6 +59,11 @@ impl Operation for PushI {
 
         Ok((instr, input))
     }
+
+    fn encode(&self, encoder: &mut Vec<u8>) {
+        encoder.push(Self::ID as u8);
+        encoder.extend_from_slice(&dump_four(self.0 as u32));
+    }
 }
 
 impl Display for PushI {
@@ -78,6 +85,10 @@ impl Operation for AddI {
 
         Ok((instr, input))
     }
+
+    fn encode(&self, encoder: &mut Vec<u8>) {
+        encoder.push(Self::ID as u8);
+    }
 }
 
 impl Display for AddI {
@@ -98,6 +109,10 @@ impl Operation for FStop {
         let instr = FStop;
 
         Ok((instr, input))
+    }
+
+    fn encode(&self, encoder: &mut Vec<u8>) {
+        encoder.push(Self::ID as u8);
     }
 }
 
@@ -121,6 +136,11 @@ impl Operation for PushCopy {
 
         Ok((instr, input))
     }
+
+    fn encode(&self, encoder: &mut Vec<u8>) {
+        encoder.push(Self::ID as u8);
+        encoder.extend_from_slice(&dump_two(self.0));
+    }
 }
 
 impl Display for PushCopy {
@@ -142,6 +162,11 @@ impl Operation for Call {
         let instr = Call(idx);
 
         Ok((instr, input))
+    }
+
+    fn encode(&self, encoder: &mut Vec<u8>) {
+        encoder.push(Self::ID as u8);
+        encoder.extend_from_slice(&dump_four(self.0));
     }
 }
 
@@ -173,6 +198,12 @@ impl Operation for Ret {
 
         Ok((instr, input))
     }
+
+    fn encode(&self, encoder: &mut Vec<u8>) {
+        encoder.push(Self::ID as u8);
+        encoder.extend_from_slice(&dump_two(self.shrink_offset));
+        encoder.extend_from_slice(&dump_two(self.ip_offset));
+    }
 }
 
 impl Display for Ret {
@@ -195,6 +226,11 @@ impl Operation for ResV {
         let instr = ResV(amount_to_reserve);
 
         Ok((instr, input))
+    }
+
+    fn encode(&self, encoder: &mut Vec<u8>) {
+        encoder.push(Self::ID as u8);
+        encoder.extend_from_slice(&dump_two(self.0));
     }
 }
 
@@ -219,6 +255,11 @@ impl Operation for PopCopy {
 
         Ok((instr, input))
     }
+
+    fn encode(&self, encoder: &mut Vec<u8>) {
+        encoder.push(Self::ID as u8);
+        encoder.extend_from_slice(&dump_two(self.0));
+    }
 }
 
 impl Display for PopCopy {
@@ -240,6 +281,11 @@ impl Operation for Goto {
         let instr = Goto(addr);
 
         Ok((instr, rest))
+    }
+
+    fn encode(&self, encoder: &mut Vec<u8>) {
+        encoder.push(Self::ID as u8);
+        encoder.extend_from_slice(&dump_four(self.0));
     }
 }
 
@@ -276,6 +322,13 @@ impl Operation for CondJmp {
 
         Ok((instr, tail))
     }
+
+    fn encode(&self, encoder: &mut Vec<u8>) {
+        encoder.push(Self::ID as u8);
+        encoder.extend_from_slice(&dump_four(self.negative_addr));
+        encoder.extend_from_slice(&dump_four(self.null_addr));
+        encoder.extend_from_slice(&dump_four(self.positive_addr));
+    }
 }
 
 impl Display for CondJmp {
@@ -301,6 +354,10 @@ impl Operation for Neg {
 
         Ok((instr, input))
     }
+
+    fn encode(&self, encoder: &mut Vec<u8>) {
+        encoder.push(Self::ID as u8);
+    }
 }
 
 impl Display for Neg {
@@ -318,6 +375,10 @@ pub(crate) fn pump_one(input: &[u8]) -> Result<(u8, &[u8])> {
     }
 }
 
+pub fn dump_one(input: u8) -> [u8; 1] {
+    [input]
+}
+
 fn pump_two(input: &[u8]) -> Result<(u16, &[u8])> {
     match input {
         [fst, snd, rest @ ..] => {
@@ -330,6 +391,10 @@ fn pump_two(input: &[u8]) -> Result<(u16, &[u8])> {
     }
 }
 
+fn dump_two(input: u16) -> [u8; 2] {
+    input.to_be_bytes()
+}
+
 fn pump_four(input: &[u8]) -> Result<(u32, &[u8])> {
     match input {
         [fst, snd, trd, fth, rest @ ..] => {
@@ -339,6 +404,10 @@ fn pump_four(input: &[u8]) -> Result<(u32, &[u8])> {
         _ => Err(anyhow!(DecodingError::UnexpectedEof))
             .context("Failed to get four bytes from input"),
     }
+}
+
+fn dump_four(input: u32) -> [u8; 4] {
+    input.to_be_bytes()
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -384,5 +453,173 @@ mod id_tests {
         assert_correct_id!(Goto);
         assert_correct_id!(CondJmp);
         assert_correct_id!(Neg);
+    }
+}
+
+#[cfg(test)]
+fn encode(instr: impl Operation) -> Vec<u8> {
+    let mut tmp = Vec::new();
+    instr.encode(&mut tmp);
+    tmp
+}
+
+#[cfg(test)]
+mod push_i {
+    use super::*;
+
+    #[test]
+    fn encoding() {
+        let instr = PushI(42);
+        let left = encode(instr);
+        let right = [0, 0, 0, 0, 42];
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod add_i {
+    use super::*;
+
+    #[test]
+    fn encoding() {
+        let instr = AddI;
+        let left = encode(instr);
+        let right = [1];
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod f_stop {
+    use super::*;
+
+    #[test]
+    fn encoding() {
+        let instr = FStop;
+        let left = encode(instr);
+        let right = [2];
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod push_copy {
+    use super::*;
+
+    #[test]
+    fn encoding() {
+        let instr = PushCopy(300);
+        let left = encode(instr);
+        let right = [3, 1, 44];
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod call {
+    use super::*;
+
+    #[test]
+    fn encoding() {
+        let instr = Call(247);
+        let left = encode(instr);
+        let right = [4, 0, 0, 0, 247];
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod ret {
+    use super::*;
+
+    #[test]
+    fn encoding() {
+        let instr = Ret {
+            shrink_offset: 2,
+            ip_offset: 4,
+        };
+        let left = encode(instr);
+        let right = [5, 0, 2, 0, 4];
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod res_v {
+    use super::*;
+
+    #[test]
+    fn encoding() {
+        let instr = ResV(22);
+        let left = encode(instr);
+        let right = [6, 0, 22];
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod pop_cpy {
+    use super::*;
+
+    #[test]
+    fn encoding() {
+        let instr = PopCopy(32);
+        let left = encode(instr);
+        let right = [7, 0, 32];
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod goto {
+    use super::*;
+
+    #[test]
+    fn encoding() {
+        let instr = Goto(444);
+        let left = encode(instr);
+        let right = [8, 0, 0, 1, 188];
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod cond_jmp {
+    use super::*;
+
+    #[test]
+    fn encoding() {
+        let instr = CondJmp {
+            negative_addr: 101,
+            null_addr: 69,
+            positive_addr: 13,
+        };
+        let left = encode(instr);
+        let right = [9, 0, 0, 0, 101, 0, 0, 0, 69, 0, 0, 0, 13];
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod neg {
+    use super::*;
+
+    #[test]
+    fn encoding() {
+        let instr = Neg;
+        let left = encode(instr);
+        let right = [10];
+
+        assert_eq!(left, right);
     }
 }

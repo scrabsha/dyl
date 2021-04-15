@@ -5,6 +5,9 @@ use crate::ast::{Addition, ExprKind, Integer};
 pub(crate) fn lower_ast(ast: &ExprKind) -> Vec<Instruction> {
     let mut tmp = Vec::new();
     ast.lower(&mut tmp);
+
+    tmp.push(Instruction::f_stop());
+
     tmp
 }
 

@@ -53,6 +53,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dyl-frontend"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dyl-compiler",
+ "dyl-vm",
+]
+
+[[package]]
 name = "dyl-vm"
 version = "0.1.0"
 dependencies = [

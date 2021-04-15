@@ -24,3 +24,15 @@ where
 
     Ok(())
 }
+
+pub fn bytecode_from_program<P>(path: P) -> Result<Vec<Instruction>>
+where
+    P: AsRef<Path>,
+{
+    let content = io::read_program(path.as_ref())
+        .with_context(|| format!("Failed to read input file `{}`", path.as_ref().display()))?;
+
+    let ast = parser::parse_input(content.as_str()).context("Failed to parse program")?;
+
+    Ok(lowering::lower_ast(&ast))
+}

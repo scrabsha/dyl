@@ -34,8 +34,8 @@ impl Lowerable for Integer {
 
 impl Lowerable for Addition {
     fn lower(&self, collector: &mut Vec<Instruction>) {
-        self.right().lower(collector);
         self.left().lower(collector);
+        self.right().lower(collector);
 
         let instr = Instruction::add_i();
         collector.push(instr);
@@ -85,8 +85,8 @@ mod addition {
         assert_eq!(
             collector,
             [
-                Instruction::push_i(2),
                 Instruction::push_i(40),
+                Instruction::push_i(2),
                 Instruction::add_i(),
             ]
         );

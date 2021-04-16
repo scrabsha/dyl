@@ -1,4 +1,5 @@
 use nom::{
+    branch::alt,
     bytes::complete::tag,
     character::complete::{digit1, multispace0},
     combinator::map,
@@ -13,7 +14,7 @@ use anyhow::{ensure, Error, Result as AnyResult};
 use crate::ast::ExprKind;
 
 pub(crate) fn parse_input(program: &str) -> AnyResult<ExprKind> {
-    addition(program)
+    level_0_expression(program)
         .map_err(|e| own_nom_err(e))
         .map_err(Error::new)
         .and_then(|(tail, expr)| {
@@ -42,12 +43,39 @@ fn integer(input: &str) -> IResult<&str, ExprKind> {
     })(input)
 }
 
-fn addition(input: &str) -> IResult<&str, ExprKind> {
+fn level_0_expression(input: &str) -> IResult<&str, ExprKind> {
     let (tail, first) = integer(input)?;
 
-    fold_many1(tuple((tag("+"), integer)), first, |left, (_, right)| {
-        ExprKind::addition(left, right)
-    })(tail)
+    fold_many1(
+        tuple((level_0_operator, integer)),
+        first,
+        |left, (operator, right)| operator.make_expr(left, right),
+    )(tail)
+}
+
+fn level_0_operator(input: &str) -> IResult<&str, Level0Operator> {
+    map(alt((tag("+"), tag("-"))), |operator| match operator {
+        "+" => Level0Operator::Plus,
+        "-" => Level0Operator::Minus,
+        _ => unreachable!(),
+    })(input)
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum Level0Operator {
+    Plus,
+    Minus,
+}
+
+impl Level0Operator {
+    fn make_expr(self, lhs: ExprKind, rhs: ExprKind) -> ExprKind {
+        let expression_maker = match self {
+            Level0Operator::Plus => ExprKind::addition,
+            Level0Operator::Minus => ExprKind::subtraction,
+        };
+
+        expression_maker(lhs, rhs)
+    }
 }
 
 #[cfg(test)]
@@ -86,17 +114,17 @@ mod integer {
 }
 
 #[cfg(test)]
-mod addition {
+mod add_and_sub {
     use super::*;
 
     #[test]
-    fn addition_single_factor_fails() {
-        assert!(addition("42").is_err());
+    fn single_factor_fails() {
+        assert!(level_0_expression("42").is_err());
     }
 
     #[test]
     fn addition_simple() {
-        let left = addition("1+1");
+        let left = level_0_expression("1+1");
         let right = Ok((
             "",
             ExprKind::addition(ExprKind::integer(1), ExprKind::integer(1)),
@@ -107,11 +135,49 @@ mod addition {
 
     #[test]
     fn addition_right_associative() {
-        let left = addition("1+1+1");
+        let left = level_0_expression("1+1+1");
         let right = Ok((
             "",
             ExprKind::addition(
                 ExprKind::addition(ExprKind::integer(1), ExprKind::integer(1)),
+                ExprKind::integer(1),
+            ),
+        ));
+
+        assert_eq!(left, right);
+    }
+    #[test]
+    fn subtraction_simple() {
+        let left = level_0_expression("43-1");
+        let right = Ok((
+            "",
+            ExprKind::subtraction(ExprKind::integer(43), ExprKind::integer(1)),
+        ));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn subtraction_right_associative() {
+        let left = level_0_expression("44-1-1");
+        let right = Ok((
+            "",
+            ExprKind::subtraction(
+                ExprKind::subtraction(ExprKind::integer(44), ExprKind::integer(1)),
+                ExprKind::integer(1),
+            ),
+        ));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn addition_subtraction_mixed() {
+        let left = level_0_expression("42-1+1");
+        let right = Ok((
+            "",
+            ExprKind::addition(
+                ExprKind::subtraction(ExprKind::integer(42), ExprKind::integer(1)),
                 ExprKind::integer(1),
             ),
         ));

@@ -14,7 +14,7 @@ pub enum Instruction {
     /// ```
     PushI(PushI),
 
-    /// Pops two integers from the stack, add them toghether, pushes the result
+    /// Pops two integers from the stack, add them together, pushes the result
     ///
     /// ```none
     /// a = s.pop()

@@ -62,12 +62,9 @@ mod integer {
     #[test]
     fn lower_42() {
         let expr = Integer::new(42);
-        let mut collector = Vec::new();
-        let mut ctxt = Context::new();
+        let (left, _) = lower_expr(&expr);
 
-        expr.lower(&mut collector, &mut ctxt);
-
-        assert_eq!(collector, [Instruction::push_i(42)]);
+        assert_eq!(left, [Instruction::push_i(42)]);
     }
 }
 
@@ -81,13 +78,10 @@ mod addition {
             ExprKind::Integer(Integer::new(40)),
             ExprKind::Integer(Integer::new(2)),
         );
-        let mut collector = Vec::new();
-        let mut ctxt = Context::new();
-
-        expr.lower(&mut collector, &mut ctxt);
+        let (left, _) = lower_expr(&expr);
 
         assert_eq!(
-            collector,
+            left,
             [
                 Instruction::push_i(40),
                 Instruction::push_i(2),
@@ -104,13 +98,10 @@ mod subtraction {
     #[test]
     fn lower_simple() {
         let expr = Subtraction::new(ExprKind::integer(43), ExprKind::integer(1));
-        let mut collector = Vec::new();
-        let mut ctxt = Context::new();
-
-        expr.lower(&mut collector, &mut ctxt);
+        let (left, _) = lower_expr(&expr);
 
         assert_eq!(
-            collector,
+            left,
             [
                 Instruction::push_i(43),
                 Instruction::push_i(1),

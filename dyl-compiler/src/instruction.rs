@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 use crate::context::{Context, Resolvable};
+use dyl_bytecode::operations as resolved_operations;
 use dyl_bytecode::Instruction as ResolvedInstruction;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -68,10 +69,10 @@ impl Resolvable for Instruction {
 pub(crate) struct PushI(pub i32);
 
 impl Resolvable for PushI {
-    type Output = dyl_bytecode::operations::PushI;
+    type Output = resolved_operations::PushI;
 
     fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
-        Ok(dyl_bytecode::operations::PushI(self.0))
+        Ok(resolved_operations::PushI(self.0))
     }
 }
 
@@ -79,10 +80,10 @@ impl Resolvable for PushI {
 pub(crate) struct AddI;
 
 impl Resolvable for AddI {
-    type Output = dyl_bytecode::operations::AddI;
+    type Output = resolved_operations::AddI;
 
     fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
-        Ok(dyl_bytecode::operations::AddI)
+        Ok(resolved_operations::AddI)
     }
 }
 
@@ -90,10 +91,10 @@ impl Resolvable for AddI {
 pub(crate) struct FStop;
 
 impl Resolvable for FStop {
-    type Output = dyl_bytecode::operations::FStop;
+    type Output = resolved_operations::FStop;
 
     fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
-        Ok(dyl_bytecode::operations::FStop)
+        Ok(resolved_operations::FStop)
     }
 }
 
@@ -101,9 +102,9 @@ impl Resolvable for FStop {
 pub(crate) struct Neg;
 
 impl Resolvable for Neg {
-    type Output = dyl_bytecode::operations::Neg;
+    type Output = resolved_operations::Neg;
 
     fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
-        Ok(dyl_bytecode::operations::Neg)
+        Ok(resolved_operations::Neg)
     }
 }

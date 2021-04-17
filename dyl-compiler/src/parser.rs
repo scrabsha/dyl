@@ -3,10 +3,11 @@ use nom::{
     bytes::complete::tag,
     character::complete::{digit1, multispace0},
     combinator::map,
-    error::Error as NomError,
+    error::{Error as NomError, ErrorKind, ParseError},
+    error_position,
     multi::fold_many1,
     sequence::{delimited, tuple},
-    Err, IResult,
+    Err, IResult, Parser,
 };
 
 use anyhow::{ensure, Error, Result as AnyResult};
@@ -14,11 +15,15 @@ use anyhow::{ensure, Error, Result as AnyResult};
 use crate::ast::ExprKind;
 
 pub(crate) fn parse_input(program: &str) -> AnyResult<ExprKind> {
-    level_0_expression(program)
+    expr(program)
         .map_err(|e| own_nom_err(e))
         .map_err(Error::new)
         .and_then(|(tail, expr)| {
-            ensure!(tail.is_empty(), "Parser did not consume the whole program");
+            ensure!(
+                tail.is_empty(),
+                "Parser did not consume the whole program: {} remains",
+                tail
+            );
             Ok(expr)
         })
 }
@@ -35,6 +40,10 @@ fn own_nom_error(err: NomError<&str>) -> NomError<String> {
     let NomError { input, code } = err;
     let input: String = input.to_owned();
     NomError { input, code }
+}
+
+fn expr(input: &str) -> IResult<&str, ExprKind> {
+    alt((level_0_expression, integer, if_else))(input)
 }
 
 fn integer(input: &str) -> IResult<&str, ExprKind> {
@@ -76,6 +85,59 @@ impl Level0Operator {
 
         expression_maker(lhs, rhs)
     }
+}
+
+fn if_else(input: &str) -> IResult<&str, ExprKind> {
+    let (tail, _) = if_(input)?;
+    let (tail, condition) = expr(tail)?;
+    let (tail, consequent) = delimited(left_curly, expr, right_curly)(tail)?;
+    let (tail, _) = tag("else")(tail)?;
+    let (tail, alternative) = delimited(left_curly, expr, right_curly)(tail)?;
+
+    let if_ = ExprKind::if_(condition, consequent, alternative);
+    Ok((tail, if_))
+}
+
+fn if_(input: &str) -> IResult<&str, ()> {
+    keyword("if")(input)
+}
+
+fn else_(input: &str) -> IResult<&str, ()> {
+    keyword("else")(input)
+}
+
+fn keyword(kw: &str) -> impl Fn(&str) -> IResult<&str, ()> + '_ {
+    move |input| {
+        let (tail, _) = map(space_insignificant(tag(kw)), drop)(input)?;
+        let next_is_alphabetic = tail
+            .chars()
+            .next()
+            .map(char::is_alphabetic)
+            .unwrap_or(false);
+
+        if next_is_alphabetic {
+            Err(Err::Error(NomError::new(input, ErrorKind::Tag)))
+        } else {
+            Ok((tail, ()))
+        }
+    }
+}
+
+fn left_curly(input: &str) -> IResult<&str, ()> {
+    map(space_insignificant(tag("{")), drop)(input)
+}
+
+fn right_curly(input: &str) -> IResult<&str, ()> {
+    map(space_insignificant(tag("}")), drop)(input)
+}
+
+fn space_insignificant<'a, O, E>(
+    parser: impl Parser<&'a str, O, E>,
+) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
+where
+    E: ParseError<&'a str>,
+{
+    delimited(multispace0, parser, multispace0)
 }
 
 #[cfg(test)]
@@ -181,6 +243,82 @@ mod add_and_sub {
                 ExprKind::integer(1),
             ),
         ));
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod if_else {
+    use super::*;
+
+    #[test]
+    fn if_else_simple() {
+        let left = if_else("if0{1}else{42}");
+        let right = Ok((
+            "",
+            ExprKind::if_(
+                ExprKind::integer(0),
+                ExprKind::integer(1),
+                ExprKind::integer(42),
+            ),
+        ));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn if_else_spaced_braces() {
+        let left = if_else("if 0 { 1 } else { 42 }");
+        let right = Ok((
+            "",
+            ExprKind::if_(
+                ExprKind::integer(0),
+                ExprKind::integer(1),
+                ExprKind::integer(42),
+            ),
+        ));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn addition_as_condition() {
+        let left = if_else("if 1 + 1 { 1 } else { 1 }");
+        let right = Ok((
+            "",
+            ExprKind::if_(
+                ExprKind::addition(ExprKind::integer(1), ExprKind::integer(1)),
+                ExprKind::integer(1),
+                ExprKind::integer(1),
+            ),
+        ));
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod keyword {
+    use super::*;
+
+    #[test]
+    fn parses() {
+        let left = keyword("if")("if");
+        let right = Ok(("", ()));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn fails_when_followed_by_letter() {
+        assert!(keyword("if")("iff").is_err());
+    }
+
+    #[test]
+    fn works_when_followed_by_non_letter() {
+        let left = keyword("if")("if42");
+        let right = Ok(("42", ()));
 
         assert_eq!(left, right);
     }

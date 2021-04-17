@@ -3,6 +3,7 @@ pub(crate) enum ExprKind {
     Addition(Addition),
     Subtraction(Subtraction),
     Integer(Integer),
+    If(If),
 }
 
 impl ExprKind {
@@ -16,6 +17,14 @@ impl ExprKind {
 
     pub(crate) fn integer(value: i32) -> ExprKind {
         ExprKind::Integer(Integer::new(value))
+    }
+
+    pub(crate) fn if_(
+        condition: ExprKind,
+        consequent: ExprKind,
+        alternative: ExprKind,
+    ) -> ExprKind {
+        ExprKind::If(If::new(condition, consequent, alternative))
     }
 }
 
@@ -71,5 +80,30 @@ impl Integer {
 
     pub(crate) fn value(&self) -> i32 {
         self.0
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct If(Box<(ExprKind, ExprKind, ExprKind)>);
+
+impl If {
+    pub(crate) fn new(condition: ExprKind, consequent: ExprKind, alternative: ExprKind) -> If {
+        If(Box::new((condition, consequent, alternative)))
+    }
+
+    pub(crate) fn condition(&self) -> &ExprKind {
+        &self.inner().0
+    }
+
+    pub(crate) fn consequent(&self) -> &ExprKind {
+        &self.inner().1
+    }
+
+    pub(crate) fn alternative(&self) -> &ExprKind {
+        &self.inner().2
+    }
+
+    fn inner(&self) -> &(ExprKind, ExprKind, ExprKind) {
+        &self.0
     }
 }

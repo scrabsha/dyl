@@ -53,10 +53,10 @@ fn integer(input: &str) -> IResult<&str, ExprKind> {
 }
 
 fn level_0_expression(input: &str) -> IResult<&str, ExprKind> {
-    let (tail, first) = integer(input)?;
+    let (tail, first) = atomic_expr(input)?;
 
     fold_many1(
-        tuple((level_0_operator, integer)),
+        tuple((level_0_operator, atomic_expr)),
         first,
         |left, (operator, right)| operator.make_expr(left, right),
     )(tail)
@@ -96,6 +96,10 @@ fn if_else(input: &str) -> IResult<&str, ExprKind> {
 
     let if_ = ExprKind::if_(condition, consequent, alternative);
     Ok((tail, if_))
+}
+
+fn atomic_expr(input: &str) -> IResult<&str, ExprKind> {
+    alt((integer, if_else))(input)
 }
 
 fn if_(input: &str) -> IResult<&str, ()> {
@@ -140,6 +144,28 @@ where
     delimited(multispace0, parser, multispace0)
 }
 
+#[cfg(test)]
+mod expr {
+    use super::*;
+
+    #[test]
+    fn if_addition_parses() {
+        let left = expr("if 1 { 1 } else { 1 } + 1");
+        let right = Ok((
+            "",
+            ExprKind::addition(
+                ExprKind::if_(
+                    ExprKind::integer(1),
+                    ExprKind::integer(1),
+                    ExprKind::integer(1),
+                ),
+                ExprKind::integer(1),
+            ),
+        ));
+
+        assert_eq!(left, right);
+    }
+}
 #[cfg(test)]
 mod integer {
     use super::*;

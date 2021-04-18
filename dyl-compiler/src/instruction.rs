@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context as AnyContext, Result};
 
 use crate::context::{Context, Resolvable};
 use dyl_bytecode::operations as resolved_operations;
@@ -10,6 +10,8 @@ pub(crate) enum Instruction {
     AddI(AddI),
     FStop(FStop),
     Neg(Neg),
+    CondJmp(CondJmp),
+    Goto(Goto),
 }
 
 macro_rules! map_instruction {
@@ -19,6 +21,8 @@ macro_rules! map_instruction {
             Instruction::AddI($name) => $do,
             Instruction::FStop($name) => $do,
             Instruction::Neg($name) => $do,
+            Instruction::CondJmp($name) => $do,
+            Instruction::Goto($name) => $do,
         }
     };
 }
@@ -35,7 +39,7 @@ macro_rules! impl_from_variants {
     };
 }
 
-impl_from_variants! { PushI, AddI, FStop, Neg }
+impl_from_variants! { PushI, AddI, FStop, Neg, CondJmp, Goto }
 
 impl Instruction {
     pub(crate) fn push_i(i: i32) -> Instruction {
@@ -52,6 +56,14 @@ impl Instruction {
 
     pub(crate) fn neg() -> Instruction {
         Instruction::Neg(Neg)
+    }
+
+    pub(crate) fn cond_jmp(negative: u32, null: u32, positive: u32) -> Instruction {
+        Instruction::CondJmp(CondJmp(negative, null, positive))
+    }
+
+    pub(crate) fn goto(addr: u32) -> Instruction {
+        Instruction::Goto(Goto(addr))
     }
 }
 
@@ -106,5 +118,49 @@ impl Resolvable for Neg {
 
     fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
         Ok(resolved_operations::Neg)
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub(crate) struct CondJmp(pub u32, pub u32, pub u32);
+
+impl Resolvable for CondJmp {
+    type Output = resolved_operations::CondJmp;
+
+    fn resolve(&self, ctxt: &Context) -> Result<Self::Output> {
+        let CondJmp(neg, null, pos) = *self;
+
+        let negative_addr = ctxt
+            .resolve(neg)
+            .with_context(|| format!("Failed to resolve negative address value of id `{}`", neg))?;
+
+        let null_addr = ctxt
+            .resolve(null)
+            .with_context(|| format!("Failed to resolve null address value of id `{}`", null))?;
+
+        let positive_addr = ctxt
+            .resolve(pos)
+            .with_context(|| format!("Failed to resolve positive address value of id `{}`", pos))?;
+
+        Ok(resolved_operations::CondJmp {
+            negative_addr,
+            null_addr,
+            positive_addr,
+        })
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub(crate) struct Goto(pub u32);
+
+impl Resolvable for Goto {
+    type Output = resolved_operations::Goto;
+
+    fn resolve(&self, ctxt: &Context) -> Result<Self::Output> {
+        let dest = ctxt
+            .resolve(self.0)
+            .context("Failed to get goto destination")?;
+
+        Ok(resolved_operations::Goto(dest))
     }
 }

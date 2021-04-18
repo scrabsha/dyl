@@ -1,4 +1,4 @@
-use crate::ast::{Addition, ExprKind, Integer, Subtraction};
+use crate::ast::{Addition, ExprKind, If, Integer, Subtraction};
 use crate::context::Context;
 use crate::instruction::Instruction;
 
@@ -23,6 +23,7 @@ impl Lowerable for ExprKind {
             ExprKind::Addition(e) => e.lower(collector, ctxt),
             ExprKind::Integer(e) => e.lower(collector, ctxt),
             ExprKind::Subtraction(e) => e.lower(collector, ctxt),
+            ExprKind::If(e) => e.lower(collector, ctxt),
         }
     }
 }
@@ -53,6 +54,46 @@ impl Lowerable for Subtraction {
 
         collector.extend_from_slice(&instructions);
     }
+}
+
+impl Lowerable for If {
+    fn lower(&self, collector: &mut Vec<Instruction>, ctxt: &mut Context) {
+        self.condition().lower(collector, ctxt);
+
+        let consequent_start = ctxt.new_anonymous_label();
+        let alt_start = ctxt.new_anonymous_label();
+        let consequent_end = ctxt.new_anonymous_label();
+
+        let cond = Instruction::cond_jmp(consequent_start, alt_start, consequent_start);
+        let goto_end = Instruction::goto(consequent_end);
+
+        collector.push(cond);
+
+        ctxt.set_label_position(consequent_start, collector.len() as u32)
+            .unwrap();
+
+        self.consequent().lower(collector, ctxt);
+
+        collector.push(goto_end);
+
+        ctxt.set_label_position(alt_start, collector.len() as u32)
+            .unwrap();
+
+        self.alternative().lower(collector, ctxt);
+
+        ctxt.set_label_position(consequent_end, collector.len() as u32)
+            .unwrap();
+    }
+}
+
+#[cfg(test)]
+fn lower_expr(expr: &impl Lowerable) -> (Vec<Instruction>, Context) {
+    let mut collector = Vec::new();
+    let mut ctxt = Context::new();
+
+    expr.lower(&mut collector, &mut ctxt);
+
+    (collector, ctxt)
 }
 
 #[cfg(test)]
@@ -109,5 +150,35 @@ mod subtraction {
                 Instruction::add_i(),
             ],
         );
+    }
+}
+
+#[cfg(test)]
+mod if_ {
+    use super::*;
+
+    #[test]
+    fn lower_simple() {
+        let expr = If::new(
+            ExprKind::integer(1),
+            ExprKind::integer(42),
+            ExprKind::integer(-1),
+        );
+        let (left, ctxt) = lower_expr(&expr);
+
+        assert_eq!(
+            left,
+            [
+                Instruction::push_i(1),
+                Instruction::cond_jmp(0, 1, 0),
+                Instruction::push_i(42),
+                Instruction::goto(2),
+                Instruction::push_i(-1),
+            ],
+        );
+
+        assert_eq!(ctxt.resolve(0).unwrap(), 2);
+        assert_eq!(ctxt.resolve(1).unwrap(), 4);
+        assert_eq!(ctxt.resolve(2).unwrap(), 5);
     }
 }

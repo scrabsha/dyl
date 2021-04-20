@@ -47,7 +47,7 @@ fn expr(input: &str) -> IResult<&str, ExprKind> {
 }
 
 fn integer(input: &str) -> IResult<&str, ExprKind> {
-    map(delimited(multispace0, digit1, multispace0), |i: &str| {
+    map(space_insignificant(digit1), |i: &str| {
         ExprKind::integer(i.parse().unwrap())
     })(input)
 }

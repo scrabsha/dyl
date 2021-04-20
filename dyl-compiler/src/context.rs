@@ -82,3 +82,60 @@ impl Display for DuplicateLabelPosition {
         )
     }
 }
+
+#[cfg(test)]
+mod anonymous_labels {
+    use super::*;
+
+    #[test]
+    fn grow_continuously() {
+        let mut ctxt = Context::new();
+        let (a, b, c) = (
+            ctxt.new_anonymous_label(),
+            ctxt.new_anonymous_label(),
+            ctxt.new_anonymous_label(),
+        );
+
+        assert_eq!(a, 0);
+        assert_eq!(b, 1);
+        assert_eq!(c, 2);
+    }
+}
+
+#[cfg(test)]
+mod labels {
+    use super::*;
+
+    #[test]
+    fn set_label_position_when_undefined() {
+        let mut ctxt = Context::new();
+        let a = ctxt.new_anonymous_label();
+        assert!(ctxt.set_label_position(a, 101).is_ok());
+    }
+
+    #[test]
+    fn set_label_position_when_already_defined() {
+        let mut ctxt = Context::new();
+        let a = ctxt.new_anonymous_label();
+        ctxt.set_label_position(a, 101).unwrap();
+
+        assert!(ctxt.set_label_position(a, 13).is_err());
+    }
+
+    #[test]
+    fn resolve_anonymous_defined() {
+        let mut ctxt = Context::new();
+        let a = ctxt.new_anonymous_label();
+        ctxt.set_label_position(a, 42);
+
+        assert_eq!(ctxt.resolve(a).unwrap(), 42);
+    }
+
+    #[test]
+    fn resolve_anonymous_undefined() {
+        let mut ctxt = Context::new();
+        let a = ctxt.new_anonymous_label();
+
+        assert!(ctxt.resolve(a).is_err());
+    }
+}

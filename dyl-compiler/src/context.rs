@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 
 use dyl_bytecode::Instruction as ResolvedInstruction;
 
@@ -15,40 +15,37 @@ pub(crate) fn resolve_context(
 }
 
 pub(crate) struct Context {
-    next_id: u32,
-    labels: HashMap<u32, u32>,
+    labels: Vec<Option<u32>>,
 }
 
 impl Context {
     pub(crate) fn new() -> Context {
-        Context {
-            next_id: 0,
-            labels: HashMap::new(),
-        }
+        Context { labels: Vec::new() }
     }
 
     pub(crate) fn new_anonymous_label(&mut self) -> u32 {
-        let tmp = self.next_id;
-        self.next_id += 1;
-        tmp
+        let tmp = self.labels.len();
+        self.labels.push(None);
+        tmp as u32
     }
 
     pub(crate) fn set_label_position(&mut self, label_id: u32, label_pos: u32) -> Result<()> {
-        if let Some(previous_label) = self.labels.insert(label_id, label_pos) {
-            Err(anyhow!(DuplicateLabelPosition(
-                label_id,
-                previous_label,
-                label_pos
-            )))
-        } else {
-            Ok(())
+        match self.labels.get_mut(label_id as usize) {
+            Some(val @ None) => *val = Some(label_pos),
+            Some(Some(previous_label)) => {
+                bail!(DuplicateLabelPosition(label_id, *previous_label, label_pos))
+            }
+            _ => bail!(UnresolvedLabel(label_id)),
         }
+
+        Ok(())
     }
 
     pub(crate) fn resolve(&self, label_id: u32) -> Result<u32> {
         self.labels
-            .get(&label_id)
+            .get(label_id as usize)
             .copied()
+            .flatten()
             .ok_or_else(|| anyhow!(UnresolvedLabel(label_id)))
     }
 }

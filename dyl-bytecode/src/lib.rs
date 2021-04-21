@@ -3,7 +3,7 @@ pub mod display;
 pub mod encode;
 pub mod operations;
 
-use operations::{AddI, Call, CondJmp, FStop, Goto, Neg, PopCopy, PushCopy, PushI, ResV, Ret};
+use operations::{AddI, Call, CondJmp, FStop, Goto, Mul, Neg, PopCopy, PushCopy, PushI, ResV, Ret};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Instruction {
@@ -91,6 +91,16 @@ pub enum Instruction {
     /// push(-tmp)
     /// ```
     Neg(Neg),
+
+    /// Pops two integers from the stack, multiplies them, and pushes the
+    /// result on the stack.
+    ///
+    /// ```none
+    /// a = pop()
+    /// b = pop()
+    /// push(a * b)
+    /// ```
+    Mul(Mul),
 }
 
 impl Instruction {
@@ -146,6 +156,10 @@ impl Instruction {
     pub fn neg() -> Instruction {
         Neg.into()
     }
+
+    pub fn mul() -> Instruction {
+        Mul.into()
+    }
 }
 
 macro_rules! impl_from_operation {
@@ -160,4 +174,4 @@ macro_rules! impl_from_operation {
     };
 }
 
-impl_from_operation! { PushI, AddI, FStop, PushCopy, Call, Ret, ResV, PopCopy, Goto, CondJmp, Neg }
+impl_from_operation! { PushI, AddI, FStop, PushCopy, Call, Ret, ResV, PopCopy, Goto, CondJmp, Neg, Mul }

@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 
 use dyl_bytecode::{
-    operations::{AddI, Call, CondJmp, FStop, Goto, Neg, PopCopy, PushCopy, PushI, ResV, Ret},
+    operations::{AddI, Call, CondJmp, FStop, Goto, Mul, Neg, PopCopy, PushCopy, PushI, ResV, Ret},
     Instruction,
 };
 
@@ -33,6 +33,7 @@ impl Runnable for Instruction {
                 .run(state)
                 .context("Failed to run `cond_jmp` instruction"),
             Instruction::Neg(op) => op.run(state).context("Failed to run `neg` instruction"),
+            Instruction::Mul(op) => op.run(state).context("Failed to run `mul` instruction"),
         }
     }
 }
@@ -169,6 +170,23 @@ impl Runnable for Neg {
             .pop_integer()
             .context("Failed to get integer to negate")?;
         state.stack_mut().push_integer(-i);
+
+        Ok(state.continue_to_next().into())
+    }
+}
+
+impl Runnable for Mul {
+    fn run(&self, mut state: RunningInterpreterState) -> Result<RunStatus> {
+        let lhs = state
+            .stack_mut()
+            .pop_integer()
+            .context("Failed to get integer left-hand-side-value")?;
+        let rhs = state
+            .stack_mut()
+            .pop_integer()
+            .context("Failed to get integer right-hand-side value")?;
+
+        state.stack_mut().push_integer(lhs * rhs);
 
         Ok(state.continue_to_next().into())
     }

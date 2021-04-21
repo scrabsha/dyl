@@ -7,7 +7,7 @@ use std::{
 
 use crate::Instruction;
 
-pub(crate) const AVAILABLE_DECODERS: [Decoder; 11] = [
+pub(crate) const AVAILABLE_DECODERS: [Decoder; 12] = [
     PushI::decode_and_wrap,
     AddI::decode_and_wrap,
     FStop::decode_and_wrap,
@@ -19,6 +19,7 @@ pub(crate) const AVAILABLE_DECODERS: [Decoder; 11] = [
     Goto::decode_and_wrap,
     CondJmp::decode_and_wrap,
     Neg::decode_and_wrap,
+    Mul::decode_and_wrap,
 ];
 
 pub(crate) type Decoder = fn(&[u8]) -> Result<(Instruction, usize, &[u8])>;
@@ -378,6 +379,31 @@ impl Display for Neg {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Mul;
+
+impl Operation for Mul {
+    const ID: usize = next_id![Neg];
+    const SIZE: usize = 1;
+    const DISPLAY_NAME: &'static str = "mul";
+
+    fn decode(input: &[u8]) -> Result<(Self, &[u8])> {
+        let instr = Mul;
+
+        Ok((instr, input))
+    }
+
+    fn encode(&self, encoder: &mut Vec<u8>) {
+        encoder.push(Self::ID as u8);
+    }
+}
+
+impl Display for Mul {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FResult {
+        write!(f, "mul")
+    }
+}
+
 pub(crate) fn pump_one(input: &[u8]) -> Result<(u8, &[u8])> {
     match input {
         [fst, rest @ ..] => Ok((*fst, rest)),
@@ -465,6 +491,7 @@ mod id_tests {
         assert_correct_id!(Goto);
         assert_correct_id!(CondJmp);
         assert_correct_id!(Neg);
+        assert_correct_id!(Mul);
     }
 }
 
@@ -718,5 +745,22 @@ mod neg {
 
     test_display! {
         Neg => "neg",
+    }
+}
+
+#[cfg(test)]
+mod mul {
+    use super::*;
+
+    test_encoding! {
+        Mul => [11],
+    }
+
+    test_symmetry! {
+        Mul, Mul, [11],
+    }
+
+    test_display! {
+        Mul => "mul",
     }
 }

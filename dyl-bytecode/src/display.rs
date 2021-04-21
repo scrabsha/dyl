@@ -18,6 +18,7 @@ impl Display for Instruction {
             Instruction::Goto(op) => op.fmt(f),
             Instruction::CondJmp(op) => op.fmt(f),
             Instruction::Neg(op) => op.fmt(f),
+            Instruction::Mul(op) => op.fmt(f),
         }
     }
 }

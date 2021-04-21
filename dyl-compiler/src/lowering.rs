@@ -1,4 +1,4 @@
-use crate::ast::{Addition, ExprKind, If, Integer, Subtraction};
+use crate::ast::{Addition, ExprKind, If, Integer, Multiplication, Subtraction};
 use crate::context::Context;
 use crate::instruction::Instruction;
 
@@ -24,6 +24,7 @@ impl Lowerable for ExprKind {
             ExprKind::Integer(e) => e.lower(collector, ctxt),
             ExprKind::Subtraction(e) => e.lower(collector, ctxt),
             ExprKind::If(e) => e.lower(collector, ctxt),
+            ExprKind::Multiplication(e) => e.lower(collector, ctxt),
         }
     }
 }
@@ -53,6 +54,14 @@ impl Lowerable for Subtraction {
         let instructions = [Instruction::neg(), Instruction::add_i()];
 
         collector.extend_from_slice(&instructions);
+    }
+}
+
+impl Lowerable for Multiplication {
+    fn lower(&self, collector: &mut Vec<Instruction>, ctxt: &mut Context) {
+        self.left().lower(collector, ctxt);
+        self.right().lower(collector, ctxt);
+        collector.push(Instruction::mul());
     }
 }
 
@@ -129,6 +138,26 @@ mod addition {
                 Instruction::add_i(),
             ]
         );
+    }
+}
+
+#[cfg(test)]
+mod multiplication {
+    use super::*;
+
+    #[test]
+    fn lower_multiplication() {
+        let expr = Multiplication::new(ExprKind::integer(7), ExprKind::integer(6));
+        let (left, _) = lower_expr(&expr);
+
+        assert_eq!(
+            left,
+            [
+                Instruction::push_i(7),
+                Instruction::push_i(6),
+                Instruction::mul(),
+            ]
+        )
     }
 }
 

@@ -43,7 +43,7 @@ fn own_nom_error(err: NomError<&str>) -> NomError<String> {
 }
 
 fn expr(input: &str) -> IResult<&str, ExprKind> {
-    alt((level_0_expression, integer, if_else))(input)
+    alt((level_0_expression, level_1_expression, integer, if_else))(input)
 }
 
 fn integer(input: &str) -> IResult<&str, ExprKind> {
@@ -53,10 +53,10 @@ fn integer(input: &str) -> IResult<&str, ExprKind> {
 }
 
 fn level_0_expression(input: &str) -> IResult<&str, ExprKind> {
-    let (tail, first) = atomic_expr(input)?;
+    let (tail, first) = alt((level_1_expression, atomic_expr))(input)?;
 
     fold_many1(
-        tuple((level_0_operator, atomic_expr)),
+        tuple((level_0_operator, alt((level_1_expression, atomic_expr)))),
         first,
         |left, (operator, right)| operator.make_expr(left, right),
     )(tail)
@@ -85,6 +85,17 @@ impl Level0Operator {
 
         expression_maker(lhs, rhs)
     }
+}
+
+fn level_1_expression(input: &str) -> IResult<&str, ExprKind> {
+    let (tail, first) = atomic_expr(input)?;
+    fold_many1(tuple((star, atomic_expr)), first, |lhs, (_, rhs)| {
+        ExprKind::multiplication(lhs, rhs)
+    })(tail)
+}
+
+fn star(input: &str) -> IResult<&str, ()> {
+    map(space_insignificant(tag("*")), drop)(input)
 }
 
 fn if_else(input: &str) -> IResult<&str, ExprKind> {
@@ -267,6 +278,52 @@ mod add_and_sub {
             ExprKind::addition(
                 ExprKind::subtraction(ExprKind::integer(42), ExprKind::integer(1)),
                 ExprKind::integer(1),
+            ),
+        ));
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod mul {
+    use super::*;
+
+    #[test]
+    fn parse_simple() {
+        let left = level_1_expression("7*6");
+        let right = Ok((
+            "",
+            ExprKind::multiplication(ExprKind::integer(7), ExprKind::integer(6)),
+        ));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn when_spaced() {
+        let left = level_1_expression("21 * 2");
+        let right = Ok((
+            "",
+            ExprKind::multiplication(ExprKind::integer(21), ExprKind::integer(2)),
+        ));
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod math {
+    use super::*;
+
+    #[test]
+    fn priority_simple() {
+        let left = level_0_expression("10 * 4 + 2");
+        let right = Ok((
+            "",
+            ExprKind::addition(
+                ExprKind::multiplication(ExprKind::integer(10), ExprKind::integer(4)),
+                ExprKind::integer(2),
             ),
         ));
 

@@ -2,6 +2,7 @@
 pub(crate) enum ExprKind {
     Addition(Addition),
     Subtraction(Subtraction),
+    Multiplication(Multiplication),
     Integer(Integer),
     If(If),
 }
@@ -13,6 +14,10 @@ impl ExprKind {
 
     pub(crate) fn subtraction(lhs: ExprKind, rhs: ExprKind) -> ExprKind {
         ExprKind::Subtraction(Subtraction::new(lhs, rhs))
+    }
+
+    pub(crate) fn multiplication(lhs: ExprKind, rhs: ExprKind) -> ExprKind {
+        ExprKind::Multiplication(Multiplication::new(lhs, rhs))
     }
 
     pub(crate) fn integer(value: i32) -> ExprKind {
@@ -55,6 +60,27 @@ pub(crate) struct Subtraction(Box<(ExprKind, ExprKind)>);
 impl Subtraction {
     pub(crate) fn new(lhs: ExprKind, rhs: ExprKind) -> Subtraction {
         Subtraction(Box::new((lhs, rhs)))
+    }
+
+    pub(crate) fn left(&self) -> &ExprKind {
+        &self.inner().0
+    }
+
+    pub(crate) fn right(&self) -> &ExprKind {
+        &self.inner().1
+    }
+
+    fn inner(&self) -> &(ExprKind, ExprKind) {
+        &self.0
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Multiplication(Box<(ExprKind, ExprKind)>);
+
+impl Multiplication {
+    pub(crate) fn new(lhs: ExprKind, rhs: ExprKind) -> Multiplication {
+        Multiplication(Box::new((lhs, rhs)))
     }
 
     pub(crate) fn left(&self) -> &ExprKind {

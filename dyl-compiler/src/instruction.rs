@@ -8,6 +8,7 @@ use dyl_bytecode::Instruction as ResolvedInstruction;
 pub(crate) enum Instruction {
     PushI(PushI),
     AddI(AddI),
+    Mul(Mul),
     FStop(FStop),
     Neg(Neg),
     CondJmp(CondJmp),
@@ -23,6 +24,7 @@ macro_rules! map_instruction {
             Instruction::Neg($name) => $do,
             Instruction::CondJmp($name) => $do,
             Instruction::Goto($name) => $do,
+            Instruction::Mul($name) => $do,
         }
     };
 }
@@ -39,7 +41,7 @@ macro_rules! impl_from_variants {
     };
 }
 
-impl_from_variants! { PushI, AddI, FStop, Neg, CondJmp, Goto }
+impl_from_variants! { PushI, AddI, FStop, Neg, CondJmp, Goto, Mul }
 
 impl Instruction {
     pub(crate) fn push_i(i: i32) -> Instruction {
@@ -64,6 +66,10 @@ impl Instruction {
 
     pub(crate) fn goto(addr: u32) -> Instruction {
         Instruction::Goto(Goto(addr))
+    }
+
+    pub(crate) fn mul() -> Instruction {
+        Instruction::Mul(Mul)
     }
 }
 
@@ -96,6 +102,17 @@ impl Resolvable for AddI {
 
     fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
         Ok(resolved_operations::AddI)
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub(crate) struct Mul;
+
+impl Resolvable for Mul {
+    type Output = resolved_operations::Mul;
+
+    fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
+        Ok(resolved_operations::Mul)
     }
 }
 

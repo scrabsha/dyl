@@ -1,9 +1,11 @@
+use operations::{
+    AddI, Call, CondJmp, FStop, Goto, Mul, Neg, Pop, PopCopy, PushCopy, PushI, ResV, Ret,
+};
+
 pub mod decode;
 pub mod display;
 pub mod encode;
 pub mod operations;
-
-use operations::{AddI, Call, CondJmp, FStop, Goto, Mul, Neg, PopCopy, PushCopy, PushI, ResV, Ret};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Instruction {
@@ -101,6 +103,14 @@ pub enum Instruction {
     /// push(a * b)
     /// ```
     Mul(Mul),
+
+    /// Pops an amount of data from the stack and discard it
+    ///
+    /// ```none
+    /// for i in range(s):
+    ///     pop()
+    /// ```
+    Pop(Pop),
 }
 
 impl Instruction {
@@ -160,6 +170,10 @@ impl Instruction {
     pub fn mul() -> Instruction {
         Mul.into()
     }
+
+    pub fn pop(idx: u16) -> Instruction {
+        Pop(idx).into()
+    }
 }
 
 macro_rules! impl_from_operation {
@@ -174,4 +188,4 @@ macro_rules! impl_from_operation {
     };
 }
 
-impl_from_operation! { PushI, AddI, FStop, PushCopy, Call, Ret, ResV, PopCopy, Goto, CondJmp, Neg, Mul }
+impl_from_operation! { PushI, AddI, FStop, PushCopy, Call, Ret, ResV, PopCopy, Goto, CondJmp, Neg, Mul, Pop }

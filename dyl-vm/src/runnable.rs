@@ -1,13 +1,15 @@
+use std::cmp::Ordering;
+
 use anyhow::{Context, Result};
 
 use dyl_bytecode::{
-    operations::{AddI, Call, CondJmp, FStop, Goto, Mul, Neg, PopCopy, PushCopy, PushI, ResV, Ret},
+    operations::{
+        AddI, Call, CondJmp, FStop, Goto, Mul, Neg, Pop, PopCopy, PushCopy, PushI, ResV, Ret,
+    },
     Instruction,
 };
 
 use crate::{interpreter::RunningInterpreterState, value::Value};
-
-use std::cmp::Ordering;
 
 pub(crate) trait Runnable {
     fn run(&self, state: RunningInterpreterState) -> Result<RunStatus>;
@@ -34,6 +36,7 @@ impl Runnable for Instruction {
                 .context("Failed to run `cond_jmp` instruction"),
             Instruction::Neg(op) => op.run(state).context("Failed to run `neg` instruction"),
             Instruction::Mul(op) => op.run(state).context("Failed to run `mul` instruction"),
+            Instruction::Pop(op) => op.run(state).context("Failed to run the `pop` instruction"),
         }
     }
 }
@@ -187,6 +190,14 @@ impl Runnable for Mul {
             .context("Failed to get integer right-hand-side value")?;
 
         state.stack_mut().push_integer(lhs * rhs);
+
+        Ok(state.continue_to_next().into())
+    }
+}
+
+impl Runnable for Pop {
+    fn run(&self, mut state: RunningInterpreterState) -> Result<RunStatus> {
+        state.stack_mut().truncate(self.0);
 
         Ok(state.continue_to_next().into())
     }

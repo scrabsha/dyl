@@ -1,13 +1,13 @@
-use anyhow::{anyhow, ensure, Context, Result};
-
 use std::{
     error::Error,
     fmt::{Display, Formatter, Result as FResult},
 };
 
+use anyhow::{anyhow, ensure, Context, Result};
+
 use crate::Instruction;
 
-pub(crate) const AVAILABLE_DECODERS: [Decoder; 12] = [
+pub(crate) const AVAILABLE_DECODERS: [Decoder; 13] = [
     PushI::decode_and_wrap,
     AddI::decode_and_wrap,
     FStop::decode_and_wrap,
@@ -20,6 +20,7 @@ pub(crate) const AVAILABLE_DECODERS: [Decoder; 12] = [
     CondJmp::decode_and_wrap,
     Neg::decode_and_wrap,
     Mul::decode_and_wrap,
+    Pop::decode_and_wrap,
 ];
 
 pub(crate) type Decoder = fn(&[u8]) -> Result<(Instruction, usize, &[u8])>;
@@ -404,6 +405,33 @@ impl Display for Mul {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Pop(pub u16);
+
+impl Operation for Pop {
+    const ID: usize = next_id![Mul];
+    const SIZE: usize = 3;
+    const DISPLAY_NAME: &'static str = "pop";
+
+    fn decode(input: &[u8]) -> Result<(Self, &[u8])> {
+        let (idx, tail) = pump_two(input).context("Failed to parse the amount of data to drop")?;
+        let instr = Pop(idx);
+
+        Ok((instr, tail))
+    }
+
+    fn encode(&self, encoder: &mut Vec<u8>) {
+        encoder.push(Self::ID as u8);
+        encoder.extend_from_slice(&dump_two(self.0));
+    }
+}
+
+impl Display for Pop {
+    fn fmt(&self, f: &mut Formatter) -> FResult {
+        write!(f, "pop {}", self.0)
+    }
+}
+
 pub(crate) fn pump_one(input: &[u8]) -> Result<(u8, &[u8])> {
     match input {
         [fst, rest @ ..] => Ok((*fst, rest)),
@@ -492,6 +520,7 @@ mod id_tests {
         assert_correct_id!(CondJmp);
         assert_correct_id!(Neg);
         assert_correct_id!(Mul);
+        assert_correct_id!(Pop);
     }
 }
 
@@ -762,5 +791,22 @@ mod mul {
 
     test_display! {
         Mul => "mul",
+    }
+}
+
+#[cfg(test)]
+mod pop {
+    use super::*;
+
+    test_encoding! {
+        Pop(10) => [12, 0, 10],
+    }
+
+    test_symmetry! {
+        Pop, Pop(32), [12, 0, 32],
+    }
+
+    test_display! {
+        Pop(111) => "pop 111",
     }
 }

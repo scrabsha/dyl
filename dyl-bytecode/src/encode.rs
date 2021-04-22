@@ -16,6 +16,7 @@ impl Instruction {
             Instruction::CondJmp(op) => op.encode(encoder),
             Instruction::Neg(op) => op.encode(encoder),
             Instruction::Mul(op) => op.encode(encoder),
+            Instruction::Pop(op) => op.encode(encoder),
         }
     }
 

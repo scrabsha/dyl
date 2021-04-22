@@ -1,6 +1,6 @@
-use anyhow::Result;
-
 use std::fmt::{Display, Formatter, Result as FResult};
+
+use anyhow::Result;
 
 use crate::Instruction;
 
@@ -19,6 +19,7 @@ impl Display for Instruction {
             Instruction::CondJmp(op) => op.fmt(f),
             Instruction::Neg(op) => op.fmt(f),
             Instruction::Mul(op) => op.fmt(f),
+            Instruction::Pop(op) => op.fmt(f),
         }
     }
 }

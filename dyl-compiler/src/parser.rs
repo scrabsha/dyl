@@ -3,7 +3,7 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::{digit1, multispace0},
-    combinator::map,
+    combinator::{map, opt, recognize},
     error::{Error as NomError, ErrorKind, ParseError},
     multi::fold_many1,
     sequence::{delimited, tuple},
@@ -45,9 +45,12 @@ fn expr(input: &str) -> IResult<&str, ExprKind> {
 }
 
 fn integer(input: &str) -> IResult<&str, ExprKind> {
-    map(space_insignificant(digit1), |i: &str| {
-        ExprKind::integer(i.parse().unwrap())
-    })(input)
+    let maybe_minus = opt(tag("-"));
+
+    map(
+        space_insignificant(recognize(tuple((maybe_minus, digit1)))),
+        |i: &str| ExprKind::integer(i.parse().unwrap()),
+    )(input)
 }
 
 fn level_0_expression(input: &str) -> IResult<&str, ExprKind> {
@@ -205,6 +208,14 @@ mod integer {
     fn integer_eats_whitespaces_before_and_after() {
         let left = integer(" 42 ");
         let right = Ok(("", ExprKind::integer(42)));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn negative() {
+        let left = integer("-101");
+        let right = Ok(("", ExprKind::integer(-101)));
 
         assert_eq!(left, right);
     }

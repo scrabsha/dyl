@@ -2,15 +2,15 @@ use anyhow::{ensure, Error, Result as AnyResult};
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{digit1, multispace0},
+    character::complete::{alpha1, alphanumeric1, digit1, multispace0},
     combinator::{map, opt, recognize},
     error::{Error as NomError, ErrorKind, ParseError},
-    multi::fold_many1,
-    sequence::{delimited, tuple},
+    multi::{fold_many1, many0, many1},
+    sequence::{delimited, pair, preceded, terminated, tuple},
     Err, IResult, Parser,
 };
 
-use crate::ast::ExprKind;
+use crate::ast::{Binding, ExprKind};
 
 pub(crate) fn parse_input(program: &str) -> AnyResult<ExprKind> {
     expr(program)
@@ -41,7 +41,7 @@ fn own_nom_error(err: NomError<&str>) -> NomError<String> {
 }
 
 fn expr(input: &str) -> IResult<&str, ExprKind> {
-    alt((level_0_expression, level_1_expression, integer, if_else))(input)
+    alt((level_0_expression, level_1_expression, atomic_expr))(input)
 }
 
 fn integer(input: &str) -> IResult<&str, ExprKind> {
@@ -110,8 +110,36 @@ fn if_else(input: &str) -> IResult<&str, ExprKind> {
     Ok((tail, if_))
 }
 
+fn bindings(input: &str) -> IResult<&str, ExprKind> {
+    let (tail, bs) = many1(binding)(input)?;
+    let (tail, ending) = expr(tail)?;
+    let bindings = ExprKind::bindings(bs, ending);
+
+    Ok((tail, bindings))
+}
+
+fn binding(input: &str) -> IResult<&str, Binding> {
+    let (tail, name) = delimited(let_, ident, equal)(input)?;
+    let (tail, value) = terminated(expr, semicolon)(tail)?;
+    Ok((tail, Binding::new(name, value)))
+}
+
 fn atomic_expr(input: &str) -> IResult<&str, ExprKind> {
-    alt((integer, if_else))(input)
+    alt((integer, if_else, bindings, ident_expr))(input)
+}
+
+fn ident_expr(input: &str) -> IResult<&str, ExprKind> {
+    let (tail, name) = ident(input)?;
+    Ok((tail, ExprKind::ident(name)))
+}
+
+fn ident(input: &str) -> IResult<&str, String> {
+    let (tail, name) = space_insignificant(recognize(pair(
+        alt((alpha1, tag("_"))),
+        many0(alt((alphanumeric1, tag("_")))),
+    )))(input)?;
+
+    Ok((tail, name.to_string()))
 }
 
 fn if_(input: &str) -> IResult<&str, ()> {
@@ -122,9 +150,21 @@ fn else_(input: &str) -> IResult<&str, ()> {
     keyword("else")(input)
 }
 
+fn let_(input: &str) -> IResult<&str, ()> {
+    keyword("let")(input)
+}
+
+fn equal(input: &str) -> IResult<&str, ()> {
+    map(space_insignificant(tag("=")), drop)(input)
+}
+
+fn semicolon(input: &str) -> IResult<&str, ()> {
+    map(space_insignificant(tag(";")), drop)(input)
+}
+
 fn keyword(kw: &str) -> impl Fn(&str) -> IResult<&str, ()> + '_ {
     move |input| {
-        let (tail, _) = map(space_insignificant(tag(kw)), drop)(input)?;
+        let (tail, _) = map(preceded(multispace0, tag(kw)), drop)(input)?;
         let next_is_alphabetic = tail
             .chars()
             .next()
@@ -134,6 +174,7 @@ fn keyword(kw: &str) -> impl Fn(&str) -> IResult<&str, ()> + '_ {
         if next_is_alphabetic {
             Err(Err::Error(NomError::new(input, ErrorKind::Tag)))
         } else {
+            let (tail, _) = multispace0(tail)?;
             Ok((tail, ()))
         }
     }
@@ -411,6 +452,62 @@ mod keyword {
     fn works_when_followed_by_non_letter() {
         let left = keyword("if")("if42");
         let right = Ok(("42", ()));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn kw_followed_by_space_and_letter() {
+        assert!(keyword("let")("let a").is_ok());
+    }
+}
+
+#[cfg(test)]
+mod binding {
+    use super::*;
+
+    #[test]
+    fn simple() {
+        let left = binding("let a = 42;");
+        let right = Ok(("", Binding::new("a".to_owned(), ExprKind::integer(42))));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn with_if_else() {
+        let left = binding("let foo = if 5 { 42 } else { 101 };");
+        let right = Ok((
+            "",
+            Binding::new(
+                "foo".to_owned(),
+                ExprKind::if_(
+                    ExprKind::integer(5),
+                    ExprKind::integer(42),
+                    ExprKind::integer(101),
+                ),
+            ),
+        ));
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod bindings {
+    use super::*;
+
+    #[test]
+    fn bindings_simple() {
+        let left = bindings("let a = 42; a");
+        let right = Ok((
+            "",
+            ExprKind::single_binding(
+                "a".to_owned(),
+                ExprKind::integer(42),
+                ExprKind::ident("a".to_owned()),
+            ),
+        ));
 
         assert_eq!(left, right);
     }

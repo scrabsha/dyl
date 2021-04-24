@@ -5,6 +5,8 @@ pub(crate) enum ExprKind {
     Multiplication(Multiplication),
     Integer(Integer),
     If(If),
+    Bindings(Bindings),
+    Ident(Ident),
 }
 
 impl ExprKind {
@@ -30,6 +32,22 @@ impl ExprKind {
         alternative: ExprKind,
     ) -> ExprKind {
         ExprKind::If(If::new(condition, consequent, alternative))
+    }
+
+    pub(crate) fn single_binding(
+        name: String,
+        value: ExprKind,
+        inner_expression: ExprKind,
+    ) -> ExprKind {
+        ExprKind::Bindings(Bindings::single(name, value, inner_expression))
+    }
+
+    pub(crate) fn bindings(bs: Vec<Binding>, next: ExprKind) -> ExprKind {
+        ExprKind::Bindings(Bindings::from_vec(bs, next))
+    }
+
+    pub(crate) fn ident(name: String) -> ExprKind {
+        ExprKind::Ident(Ident::new(name))
     }
 }
 
@@ -131,5 +149,57 @@ impl If {
 
     fn inner(&self) -> &(ExprKind, ExprKind, ExprKind) {
         &self.0
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Bindings(Vec<Binding>, Box<ExprKind>);
+
+impl Bindings {
+    pub(crate) fn single(name: String, value: ExprKind, next: ExprKind) -> Bindings {
+        let binding = Binding::new(name, value);
+        Bindings(vec![binding], Box::new(next))
+    }
+
+    pub(crate) fn from_vec(bs: Vec<Binding>, next: ExprKind) -> Bindings {
+        Bindings(bs, Box::new(next))
+    }
+
+    pub(crate) fn defines(&self) -> &[Binding] {
+        &self.0.as_slice()
+    }
+
+    pub(crate) fn ending_expression(&self) -> &ExprKind {
+        &self.1
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Binding(String, ExprKind);
+
+impl Binding {
+    pub(crate) fn new(name: String, value: ExprKind) -> Binding {
+        Binding(name, value)
+    }
+
+    pub(crate) fn name(&self) -> &str {
+        self.0.as_str()
+    }
+
+    pub(crate) fn value(&self) -> &ExprKind {
+        &self.1
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Ident(String);
+
+impl Ident {
+    pub(crate) fn new(name: String) -> Ident {
+        Ident(name)
+    }
+
+    pub(crate) fn name(&self) -> &str {
+        self.0.as_str()
     }
 }

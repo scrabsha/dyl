@@ -1,8 +1,9 @@
 use anyhow::{Context as AnyContext, Result};
 
-use crate::context::{Context, Resolvable};
 use dyl_bytecode::operations as resolved_operations;
 use dyl_bytecode::Instruction as ResolvedInstruction;
+
+use crate::context::{Context, Resolvable};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub(crate) enum Instruction {
@@ -13,6 +14,9 @@ pub(crate) enum Instruction {
     Neg(Neg),
     CondJmp(CondJmp),
     Goto(Goto),
+    PopCopy(PopCopy),
+    Pop(Pop),
+    PushCopy(PushCopy),
 }
 
 macro_rules! map_instruction {
@@ -25,6 +29,9 @@ macro_rules! map_instruction {
             Instruction::CondJmp($name) => $do,
             Instruction::Goto($name) => $do,
             Instruction::Mul($name) => $do,
+            Instruction::PopCopy($name) => $do,
+            Instruction::Pop($name) => $do,
+            Instruction::PushCopy($name) => $do,
         }
     };
 }
@@ -41,7 +48,7 @@ macro_rules! impl_from_variants {
     };
 }
 
-impl_from_variants! { PushI, AddI, FStop, Neg, CondJmp, Goto, Mul }
+impl_from_variants! { PushI, AddI, FStop, Neg, CondJmp, Goto, Mul, PopCopy, Pop, PushCopy }
 
 impl Instruction {
     pub(crate) fn push_i(i: i32) -> Instruction {
@@ -70,6 +77,18 @@ impl Instruction {
 
     pub(crate) fn mul() -> Instruction {
         Instruction::Mul(Mul)
+    }
+
+    pub(crate) fn pop_copy(offset: u16) -> Instruction {
+        Instruction::PopCopy(PopCopy(offset))
+    }
+
+    pub(crate) fn pop(offset: u16) -> Instruction {
+        Instruction::Pop(Pop(offset))
+    }
+
+    pub(crate) fn push_copy(offset: u16) -> Instruction {
+        Instruction::PushCopy(PushCopy(offset))
     }
 }
 
@@ -179,5 +198,38 @@ impl Resolvable for Goto {
             .context("Failed to get goto destination")?;
 
         Ok(resolved_operations::Goto(dest))
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub(crate) struct PopCopy(pub u16);
+
+impl Resolvable for PopCopy {
+    type Output = resolved_operations::PopCopy;
+
+    fn resolve(&self, ctxt: &Context) -> Result<Self::Output> {
+        Ok(resolved_operations::PopCopy(self.0))
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub(crate) struct Pop(pub u16);
+
+impl Resolvable for Pop {
+    type Output = resolved_operations::Pop;
+
+    fn resolve(&self, ctxt: &Context) -> Result<Self::Output> {
+        Ok(resolved_operations::Pop(self.0))
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub(crate) struct PushCopy(pub u16);
+
+impl Resolvable for PushCopy {
+    type Output = resolved_operations::PushCopy;
+
+    fn resolve(&self, ctxt: &Context) -> Result<Self::Output> {
+        Ok(resolved_operations::PushCopy(self.0))
     }
 }

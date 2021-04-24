@@ -1,17 +1,17 @@
+use std::error::Error;
+use std::fmt::{Display, Formatter, Result as FResult};
+
 use anyhow::{anyhow, bail, Result};
 
 use dyl_bytecode::Instruction as ResolvedInstruction;
 
 use crate::instruction::Instruction;
-use std::collections::HashMap;
-use std::error::Error;
-use std::fmt::{Display, Formatter, Result as FResult};
 
 pub(crate) fn resolve_context(
     instructions: &[Instruction],
     ctxt: &Context,
 ) -> Result<Vec<ResolvedInstruction>> {
-    instructions.into_iter().map(|i| i.resolve(ctxt)).collect()
+    instructions.iter().map(|i| i.resolve(ctxt)).collect()
 }
 
 pub(crate) struct Context {
@@ -123,7 +123,7 @@ mod labels {
     fn resolve_anonymous_defined() {
         let mut ctxt = Context::new();
         let a = ctxt.new_anonymous_label();
-        ctxt.set_label_position(a, 42);
+        ctxt.set_label_position(a, 42).unwrap();
 
         assert_eq!(ctxt.resolve(a).unwrap(), 42);
     }

@@ -1,22 +1,20 @@
+use anyhow::{ensure, Error, Result as AnyResult};
 use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::{digit1, multispace0},
     combinator::map,
     error::{Error as NomError, ErrorKind, ParseError},
-    error_position,
     multi::fold_many1,
     sequence::{delimited, tuple},
     Err, IResult, Parser,
 };
 
-use anyhow::{ensure, Error, Result as AnyResult};
-
 use crate::ast::ExprKind;
 
 pub(crate) fn parse_input(program: &str) -> AnyResult<ExprKind> {
     expr(program)
-        .map_err(|e| own_nom_err(e))
+        .map_err(own_nom_err)
         .map_err(Error::new)
         .and_then(|(tail, expr)| {
             ensure!(

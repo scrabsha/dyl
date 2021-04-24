@@ -1,6 +1,5 @@
 use anyhow::Result;
 
-use dyl_bytecode::display::disassemble;
 use dyl_bytecode::Instruction;
 use interpreter::Interpreter;
 

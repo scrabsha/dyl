@@ -10,12 +10,6 @@ pub(crate) struct Interpreter {
 }
 
 impl Interpreter {
-    pub(crate) fn from_bytecode(code: &[u8]) -> Result<Interpreter> {
-        let code = Instruction::from_bytes(code).context("Failed to decode input")?;
-
-        Ok(Interpreter::from_instructions(code))
-    }
-
     pub(crate) fn from_instructions(code: Vec<Instruction>) -> Interpreter {
         Interpreter { code }
     }

@@ -77,7 +77,11 @@ macro_rules! generate_bytecode {
     };
 
     ( $( $tail:tt )* ) => {{
-        let mut acc = Vec::new();
+        // TODO: figure out a way to initialize all the vector at once, instead
+        // of always pushing on it, maybe by keeping a list of all the generated
+        // instructions.
+        // As a workaround, a buffer of 50 instructions is created.
+        let mut acc = Vec::with_capacity(50);
         generate_bytecode! { @internal(acc, 0) { $( $tail )* } };
         acc
     }};

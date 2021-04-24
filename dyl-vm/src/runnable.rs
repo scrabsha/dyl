@@ -197,7 +197,7 @@ impl Runnable for Mul {
 
 impl Runnable for Pop {
     fn run(&self, mut state: RunningInterpreterState) -> Result<RunStatus> {
-        state.stack_mut().truncate(self.0);
+        state.stack_mut().truncate(self.0)?;
 
         Ok(state.continue_to_next().into())
     }

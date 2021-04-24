@@ -207,7 +207,7 @@ pub(crate) struct PopCopy(pub u16);
 impl Resolvable for PopCopy {
     type Output = resolved_operations::PopCopy;
 
-    fn resolve(&self, ctxt: &Context) -> Result<Self::Output> {
+    fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
         Ok(resolved_operations::PopCopy(self.0))
     }
 }
@@ -218,7 +218,7 @@ pub(crate) struct Pop(pub u16);
 impl Resolvable for Pop {
     type Output = resolved_operations::Pop;
 
-    fn resolve(&self, ctxt: &Context) -> Result<Self::Output> {
+    fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
         Ok(resolved_operations::Pop(self.0))
     }
 }
@@ -229,7 +229,7 @@ pub(crate) struct PushCopy(pub u16);
 impl Resolvable for PushCopy {
     type Output = resolved_operations::PushCopy;
 
-    fn resolve(&self, ctxt: &Context) -> Result<Self::Output> {
+    fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
         Ok(resolved_operations::PushCopy(self.0))
     }
 }

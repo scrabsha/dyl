@@ -34,20 +34,23 @@ impl ExprKind {
         ExprKind::If(If::new(condition, consequent, alternative))
     }
 
-    pub(crate) fn single_binding(
-        name: String,
-        value: ExprKind,
-        inner_expression: ExprKind,
-    ) -> ExprKind {
-        ExprKind::Bindings(Bindings::single(name, value, inner_expression))
-    }
-
     pub(crate) fn bindings(bs: Vec<Binding>, next: ExprKind) -> ExprKind {
         ExprKind::Bindings(Bindings::from_vec(bs, next))
     }
 
     pub(crate) fn ident(name: String) -> ExprKind {
         ExprKind::Ident(Ident::new(name))
+    }
+}
+
+#[cfg(test)]
+impl ExprKind {
+    pub(crate) fn single_binding(
+        name: String,
+        value: ExprKind,
+        inner_expression: ExprKind,
+    ) -> ExprKind {
+        ExprKind::Bindings(Bindings::single(name, value, inner_expression))
     }
 }
 
@@ -156,11 +159,6 @@ impl If {
 pub(crate) struct Bindings(Vec<Binding>, Box<ExprKind>);
 
 impl Bindings {
-    pub(crate) fn single(name: String, value: ExprKind, next: ExprKind) -> Bindings {
-        let binding = Binding::new(name, value);
-        Bindings(vec![binding], Box::new(next))
-    }
-
     pub(crate) fn from_vec(bs: Vec<Binding>, next: ExprKind) -> Bindings {
         Bindings(bs, Box::new(next))
     }
@@ -171,6 +169,14 @@ impl Bindings {
 
     pub(crate) fn ending_expression(&self) -> &ExprKind {
         &self.1
+    }
+}
+
+#[cfg(test)]
+impl Bindings {
+    pub(crate) fn single(name: String, value: ExprKind, next: ExprKind) -> Bindings {
+        let binding = Binding::new(name, value);
+        Bindings(vec![binding], Box::new(next))
     }
 }
 

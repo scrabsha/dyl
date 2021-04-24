@@ -58,10 +58,6 @@ impl Context {
         self.variables.push(String::new());
     }
 
-    pub(crate) fn add_variable(&mut self, name: String) {
-        self.variables.push(name);
-    }
-
     pub(crate) fn name_last_anonymous(&mut self, name: String) -> Result<()> {
         let stack_top = self.variables_stack_top_mut()?;
 
@@ -100,21 +96,17 @@ impl Context {
         Ok(())
     }
 
-    #[cfg(not(test))]
-    fn variables_stack_top(&self) -> Result<&str> {
-        self.variables_stack_top_inner()
-    }
-
     #[cfg(test)]
     pub(crate) fn variables_stack_top(&self) -> Result<&str> {
-        self.variables_stack_top_inner()
-    }
-
-    fn variables_stack_top_inner(&self) -> Result<&str> {
         self.variables
             .last()
             .map(String::as_str)
             .ok_or_else(|| anyhow!(EmptyVariableStack))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn add_variable(&mut self, name: String) {
+        self.variables.push(name);
     }
 
     fn variables_stack_top_mut(&mut self) -> Result<&mut String> {

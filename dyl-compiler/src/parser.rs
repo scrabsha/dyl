@@ -12,8 +12,8 @@ use nom::{
 
 use crate::ast::{Binding, ExprKind};
 
-pub(crate) fn parse_input(program: &str) -> AnyResult<ExprKind> {
-    expr(program)
+pub(crate) fn parse_input(input_code: &str) -> AnyResult<ExprKind> {
+    program(input_code)
         .map_err(own_nom_err)
         .map_err(Error::new)
         .and_then(|(tail, expr)| {
@@ -38,6 +38,14 @@ fn own_nom_error(err: NomError<&str>) -> NomError<String> {
     let NomError { input, code } = err;
     let input: String = input.to_owned();
     NomError { input, code }
+}
+
+fn program(input: &str) -> IResult<&str, ExprKind> {
+    alt((bindings, expr))(input)
+}
+
+fn block(input: &str) -> IResult<&str, ExprKind> {
+    delimited(left_curly, alt((bindings, expr)), right_curly)(input)
 }
 
 fn expr(input: &str) -> IResult<&str, ExprKind> {
@@ -125,7 +133,7 @@ fn binding(input: &str) -> IResult<&str, Binding> {
 }
 
 fn atomic_expr(input: &str) -> IResult<&str, ExprKind> {
-    alt((integer, if_else, bindings, ident_expr))(input)
+    alt((integer, if_else, block, ident_expr))(input)
 }
 
 fn ident_expr(input: &str) -> IResult<&str, ExprKind> {
@@ -195,6 +203,74 @@ where
     E: ParseError<&'a str>,
 {
     delimited(multispace0, parser, multispace0)
+}
+
+#[cfg(test)]
+mod program {
+    use super::*;
+
+    // TODO: once we get function parsing, replace it with a set of functions
+
+    #[test]
+    fn handles_bindings() {
+        let left = program("let a = 40; let b = 2; a + b");
+        let right = Ok((
+            "",
+            ExprKind::bindings(
+                vec![
+                    Binding::new("a".to_owned(), ExprKind::integer(40)),
+                    Binding::new("b".to_owned(), ExprKind::integer(2)),
+                ],
+                ExprKind::addition(
+                    ExprKind::ident("a".to_owned()),
+                    ExprKind::ident("b".to_owned()),
+                ),
+            ),
+        ));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn handles_expression() {
+        let left = program("1 + 2 + 2");
+        let right = Ok((
+            "",
+            ExprKind::addition(
+                ExprKind::addition(ExprKind::integer(1), ExprKind::integer(2)),
+                ExprKind::integer(2),
+            ),
+        ));
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod block {
+    use super::*;
+
+    #[test]
+    fn handles_bindings() {
+        let left = block("{ let a = 42; a }");
+        let right = Ok((
+            "",
+            ExprKind::bindings(
+                vec![Binding::new("a".to_owned(), ExprKind::integer(42))],
+                ExprKind::ident("a".to_owned()),
+            ),
+        ));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn handles_expression() {
+        let left = block("{ 42 }");
+        let right = Ok(("", ExprKind::integer(42)));
+
+        assert_eq!(left, right);
+    }
 }
 
 #[cfg(test)]

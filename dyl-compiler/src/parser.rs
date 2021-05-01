@@ -140,8 +140,8 @@ fn bindings(input: Input) -> IResult<ExprKind> {
 }
 
 fn binding(input: Input) -> IResult<Binding> {
-    let (tail, name) = delimited(let_, ident, equal)(input)?;
-    let (tail, value) = terminated(expr, semicolon)(tail)?;
+    let (tail, name) = delimited(let_, ident, expect(equal, epsilon_recovery))(input)?;
+    let (tail, value) = terminated(expr, expect(semicolon, epsilon_recovery))(tail)?;
     Ok((tail, Binding::new(name, value)))
 }
 
@@ -216,6 +216,27 @@ where
     E: ParseError<Input<'a>>,
 {
     delimited(multispace0, parser, multispace0)
+}
+
+fn expect<O, P, R>(mut parser: P, mut recovery: R) -> impl FnMut(Input) -> IResult<Option<O>>
+where
+    P: FnMut(Input) -> IResult<O>,
+    R: FnMut(Input, ErrorKind) -> Option<Input>,
+{
+    move |input| match parser(input) {
+        Ok((tail, data)) => Ok((tail, Some(data))),
+        Err(Err::Incomplete(_)) => panic!("Parser returned Incomplete variant"),
+        Err(Err::Error(NomError { input, code })) | Err(Err::Failure(NomError { input, code })) => {
+            match recovery(input, code) {
+                Some(tail) => Ok((tail, None)),
+                None => Ok((input, None)),
+            }
+        }
+    }
+}
+
+fn epsilon_recovery(input: Input, _: ErrorKind) -> Option<Input> {
+    Some(input)
 }
 
 fn tag<'a>(t: &'a str) -> impl FnMut(Input) -> IResult<&str> + 'a {
@@ -606,6 +627,16 @@ mod binding {
         ));
 
         assert_eq!(left, right);
+    }
+
+    #[test]
+    fn recovers_on_missing_equal() {
+        assert!(parse! { binding "let x 42;" }.0.is_ok());
+    }
+
+    #[test]
+    fn recovers_on_missing_semicolon() {
+        assert!(parse! { binding "let x = 42" }.0.is_ok());
     }
 }
 

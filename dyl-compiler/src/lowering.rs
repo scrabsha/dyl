@@ -44,7 +44,7 @@ impl Lowerable for Integer {
     fn lower(&self, collector: &mut Vec<Instruction>, ctxt: &mut Context) -> LoweringResult {
         let instr = Instruction::push_i(self.value());
         collector.push(instr);
-        ctxt.add_anonymous_variable();
+        ctxt.stack_mut().push_anonymous();
 
         Ok(())
     }
@@ -57,7 +57,7 @@ impl Lowerable for Addition {
 
         let instr = Instruction::add_i();
         collector.push(instr);
-        ctxt.drop_anonymous_variable().unwrap();
+        ctxt.stack_mut().pop_top_anonymous().unwrap();
 
         left_exp.and(right_exp)
     }
@@ -71,7 +71,7 @@ impl Lowerable for Subtraction {
         let instructions = [Instruction::neg(), Instruction::add_i()];
 
         collector.extend_from_slice(&instructions);
-        ctxt.drop_anonymous_variable().unwrap();
+        ctxt.stack_mut().pop_top_anonymous().unwrap();
 
         left_exp.and(right_exp)
     }
@@ -82,7 +82,7 @@ impl Lowerable for Multiplication {
         let left_exp = self.left().lower(collector, ctxt);
         let right_exp = self.right().lower(collector, ctxt);
         collector.push(Instruction::mul());
-        ctxt.drop_anonymous_variable().unwrap();
+        ctxt.stack_mut().pop_top_anonymous().unwrap();
 
         left_exp.and(right_exp)
     }
@@ -100,26 +100,26 @@ impl Lowerable for If {
         let goto_end = Instruction::goto(consequent_end);
 
         collector.push(cond);
-        ctxt.drop_anonymous_variable().unwrap();
+        ctxt.stack_mut().pop_top_anonymous().unwrap();
 
         ctxt.set_label_position(consequent_start, collector.len() as u32)
             .unwrap();
 
-        let branches_subcontext = ctxt.new_subcontext();
+        let branches_subcontext = ctxt.stack().new_subcontext();
 
         let consequent_exp = self.consequent().lower(collector, ctxt);
 
         collector.push(goto_end);
 
-        ctxt.drop_subcontext(branches_subcontext);
+        ctxt.stack_mut().drop_subcontext(branches_subcontext);
 
         ctxt.set_label_position(alt_start, collector.len() as u32)
             .unwrap();
 
         let alternative_exp = self.alternative().lower(collector, ctxt);
 
-        ctxt.drop_subcontext(branches_subcontext);
-        ctxt.add_anonymous_variable();
+        ctxt.stack_mut().drop_subcontext(branches_subcontext);
+        ctxt.stack_mut().push_anonymous();
 
         ctxt.set_label_position(consequent_end, collector.len() as u32)
             .unwrap();
@@ -130,7 +130,7 @@ impl Lowerable for If {
 
 impl Lowerable for Bindings {
     fn lower(&self, collector: &mut Vec<Instruction>, ctxt: &mut Context) -> LoweringResult {
-        let subcontext_id = ctxt.new_subcontext();
+        let subcontext_id = ctxt.stack().new_subcontext();
         let defines_exp = self
             .defines()
             .iter()
@@ -144,8 +144,8 @@ impl Lowerable for Bindings {
         collector.push(Instruction::pop_copy(len));
         collector.push(Instruction::pop(len - 1));
 
-        ctxt.drop_subcontext(subcontext_id);
-        ctxt.add_anonymous_variable();
+        ctxt.stack_mut().drop_subcontext(subcontext_id);
+        ctxt.stack_mut().push_anonymous();
 
         defines_exp.and(ending_exp)
     }
@@ -154,7 +154,9 @@ impl Lowerable for Bindings {
 impl Lowerable for Binding {
     fn lower(&self, collector: &mut Vec<Instruction>, ctxt: &mut Context) -> LoweringResult {
         let value_exp = self.value().lower(collector, ctxt);
-        ctxt.name_last_anonymous(self.name().to_owned()).unwrap();
+        ctxt.stack_mut()
+            .name_top_anonymous(self.name().to_owned())
+            .unwrap();
 
         value_exp
     }
@@ -162,11 +164,11 @@ impl Lowerable for Binding {
 
 impl Lowerable for Ident {
     fn lower(&self, collector: &mut Vec<Instruction>, ctxt: &mut Context) -> LoweringResult {
-        let stack_offset = match ctxt.resolve_variable(self.name()) {
+        let stack_offset = match ctxt.stack().resolve(self.name()) {
             Some(offset) => offset,
             None => {
                 println!("Error: symbol `{}` not found", self.name());
-                ctxt.add_anonymous_variable();
+                ctxt.stack_mut().push_anonymous();
 
                 return Err(LoweringError);
             }
@@ -175,7 +177,7 @@ impl Lowerable for Ident {
         // TODO: convert stack index to u16
         collector.push(Instruction::push_copy(stack_offset as u16));
 
-        ctxt.add_anonymous_variable();
+        ctxt.stack_mut().push_anonymous();
 
         Ok(())
     }
@@ -251,8 +253,8 @@ mod addition {
     fn stack_effects() {
         let (_, ctxt) = lower_expr(&simple_addition());
 
-        assert_eq!(ctxt.variables_stack_len(), 1);
-        assert!(ctxt.variables_stack_top().unwrap().is_empty());
+        assert_eq!(ctxt.stack().depth(), 1);
+        assert!(ctxt.stack().top().unwrap().is_empty());
     }
 }
 
@@ -282,8 +284,8 @@ mod multiplication {
     fn stack_effects() {
         let (_, ctxt) = lower_expr(&simple_multiplication());
 
-        assert_eq!(ctxt.variables_stack_len(), 1);
-        assert!(ctxt.variables_stack_top().unwrap().is_empty());
+        assert_eq!(ctxt.stack().depth(), 1);
+        assert!(ctxt.stack().top().unwrap().is_empty());
     }
 }
 
@@ -314,8 +316,8 @@ mod subtraction {
     fn stack_effects() {
         let (_, ctxt) = lower_expr(&simple_subtraction());
 
-        assert_eq!(ctxt.variables_stack_len(), 1);
-        assert!(ctxt.variables_stack_top().unwrap().is_empty());
+        assert_eq!(ctxt.stack().depth(), 1);
+        assert!(ctxt.stack().top().unwrap().is_empty());
     }
 }
 
@@ -360,8 +362,8 @@ mod if_ {
     fn stack_effects() {
         let (_, ctxt) = lower_expr(&simple_if());
 
-        assert_eq!(ctxt.variables_stack_len(), 1);
-        assert!(ctxt.variables_stack_top().unwrap().is_empty());
+        assert_eq!(ctxt.stack().depth(), 1);
+        assert!(ctxt.stack().top().unwrap().is_empty());
     }
 }
 
@@ -396,8 +398,8 @@ mod bindings {
     fn stack_effects() {
         let (_, ctxt) = lower_expr(&simple_bindings());
 
-        assert_eq!(ctxt.variables_stack_len(), 1);
-        assert!(ctxt.variables_stack_top().unwrap().is_empty());
+        assert_eq!(ctxt.stack().depth(), 1);
+        assert!(ctxt.stack().top().unwrap().is_empty());
     }
 }
 
@@ -420,8 +422,8 @@ mod binding {
     fn stack_effects() {
         let (_, ctxt) = lower_expr(&simple_binding());
 
-        assert_eq!(ctxt.variables_stack_len(), 1);
-        assert_eq!(ctxt.variables_stack_top().unwrap(), "foo");
+        assert_eq!(ctxt.stack().depth(), 1);
+        assert_eq!(ctxt.stack().top().unwrap(), "foo");
     }
 }
 
@@ -435,8 +437,8 @@ mod ident {
 
     fn lower_simple_ident() -> (Vec<Instruction>, Context) {
         let mut ctxt = Context::new();
-        ctxt.add_variable("foo".to_owned());
-        ctxt.add_variable("bar".to_owned());
+        ctxt.stack_mut().push_named("foo".to_owned());
+        ctxt.stack_mut().push_named("bar".to_owned());
 
         let mut instructions = Vec::new();
 
@@ -456,8 +458,8 @@ mod ident {
     fn stack_effects() {
         let (_, ctxt) = lower_simple_ident();
 
-        assert_eq!(ctxt.variables_stack_len(), 3);
-        assert!(ctxt.variables_stack_top().unwrap().is_empty());
+        assert_eq!(ctxt.stack().depth(), 3);
+        assert!(ctxt.stack().top().unwrap().is_empty());
     }
 
     #[test]
@@ -469,6 +471,6 @@ mod ident {
         let rslt = exp.lower(&mut instructions, &mut ctxt);
 
         assert!(rslt.is_err());
-        assert_eq!(ctxt.variables_stack_len(), 1);
+        assert_eq!(ctxt.stack().depth(), 1);
     }
 }

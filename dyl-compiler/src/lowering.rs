@@ -1,25 +1,30 @@
+use std::{
+    error::Error,
+    fmt::{self, Display, Formatter},
+};
+
 use crate::{
     ast::{Addition, Binding, Bindings, ExprKind, Ident, If, Integer, Multiplication, Subtraction},
     context::Context,
     instruction::Instruction,
 };
 
-pub(crate) fn lower_ast(ast: &ExprKind) -> (Vec<Instruction>, Context) {
+pub(crate) fn lower_ast(ast: &ExprKind) -> Result<(Vec<Instruction>, Context), LoweringError> {
     let mut tmp = Vec::new();
     let mut ctxt = Context::new();
 
-    ast.lower(&mut tmp, &mut ctxt).unwrap();
+    ast.lower(&mut tmp, &mut ctxt).map_err(|_| LoweringError)?;
 
     tmp.push(Instruction::f_stop());
 
-    (tmp, ctxt)
+    Ok((tmp, ctxt))
 }
 
 trait Lowerable {
     fn lower(&self, collector: &mut Vec<Instruction>, ctxt: &mut Context) -> LoweringResult;
 }
 
-type LoweringResult = Result<(), ()>;
+type LoweringResult = Result<(), LoweringError>;
 
 impl Lowerable for ExprKind {
     fn lower(&self, collector: &mut Vec<Instruction>, ctxt: &mut Context) -> LoweringResult {
@@ -47,45 +52,45 @@ impl Lowerable for Integer {
 
 impl Lowerable for Addition {
     fn lower(&self, collector: &mut Vec<Instruction>, ctxt: &mut Context) -> LoweringResult {
-        self.left().lower(collector, ctxt)?;
-        self.right().lower(collector, ctxt)?;
+        let left_exp = self.left().lower(collector, ctxt);
+        let right_exp = self.right().lower(collector, ctxt);
 
         let instr = Instruction::add_i();
         collector.push(instr);
         ctxt.drop_anonymous_variable().unwrap();
 
-        Ok(())
+        left_exp.and(right_exp)
     }
 }
 
 impl Lowerable for Subtraction {
     fn lower(&self, collector: &mut Vec<Instruction>, ctxt: &mut Context) -> LoweringResult {
-        self.left().lower(collector, ctxt)?;
-        self.right().lower(collector, ctxt)?;
+        let left_exp = self.left().lower(collector, ctxt);
+        let right_exp = self.right().lower(collector, ctxt);
 
         let instructions = [Instruction::neg(), Instruction::add_i()];
 
         collector.extend_from_slice(&instructions);
         ctxt.drop_anonymous_variable().unwrap();
 
-        Ok(())
+        left_exp.and(right_exp)
     }
 }
 
 impl Lowerable for Multiplication {
     fn lower(&self, collector: &mut Vec<Instruction>, ctxt: &mut Context) -> LoweringResult {
-        self.left().lower(collector, ctxt)?;
-        self.right().lower(collector, ctxt)?;
+        let left_exp = self.left().lower(collector, ctxt);
+        let right_exp = self.right().lower(collector, ctxt);
         collector.push(Instruction::mul());
         ctxt.drop_anonymous_variable().unwrap();
 
-        Ok(())
+        left_exp.and(right_exp)
     }
 }
 
 impl Lowerable for If {
     fn lower(&self, collector: &mut Vec<Instruction>, ctxt: &mut Context) -> LoweringResult {
-        self.condition().lower(collector, ctxt)?;
+        let condition_exp = self.condition().lower(collector, ctxt);
 
         let consequent_start = ctxt.new_anonymous_label();
         let alt_start = ctxt.new_anonymous_label();
@@ -102,7 +107,7 @@ impl Lowerable for If {
 
         let branches_subcontext = ctxt.new_subcontext();
 
-        self.consequent().lower(collector, ctxt)?;
+        let consequent_exp = self.consequent().lower(collector, ctxt);
 
         collector.push(goto_end);
 
@@ -111,7 +116,7 @@ impl Lowerable for If {
         ctxt.set_label_position(alt_start, collector.len() as u32)
             .unwrap();
 
-        self.alternative().lower(collector, ctxt)?;
+        let alternative_exp = self.alternative().lower(collector, ctxt);
 
         ctxt.drop_subcontext(branches_subcontext);
         ctxt.add_anonymous_variable();
@@ -119,18 +124,20 @@ impl Lowerable for If {
         ctxt.set_label_position(consequent_end, collector.len() as u32)
             .unwrap();
 
-        Ok(())
+        condition_exp.and(consequent_exp).and(alternative_exp)
     }
 }
 
 impl Lowerable for Bindings {
     fn lower(&self, collector: &mut Vec<Instruction>, ctxt: &mut Context) -> LoweringResult {
         let subcontext_id = ctxt.new_subcontext();
-        self.defines()
+        let defines_exp = self
+            .defines()
             .iter()
-            .try_for_each(|b| b.lower(collector, ctxt))?;
+            .map(|b| b.lower(collector, ctxt))
+            .fold(Ok(()), Result::and);
 
-        self.ending_expression().lower(collector, ctxt)?;
+        let ending_exp = self.ending_expression().lower(collector, ctxt);
 
         let len = self.defines().len() as u16;
 
@@ -140,23 +147,30 @@ impl Lowerable for Bindings {
         ctxt.drop_subcontext(subcontext_id);
         ctxt.add_anonymous_variable();
 
-        Ok(())
+        defines_exp.and(ending_exp)
     }
 }
 
 impl Lowerable for Binding {
     fn lower(&self, collector: &mut Vec<Instruction>, ctxt: &mut Context) -> LoweringResult {
-        self.value().lower(collector, ctxt)?;
+        let value_exp = self.value().lower(collector, ctxt);
         ctxt.name_last_anonymous(self.name().to_owned()).unwrap();
 
-        Ok(())
+        value_exp
     }
 }
 
 impl Lowerable for Ident {
     fn lower(&self, collector: &mut Vec<Instruction>, ctxt: &mut Context) -> LoweringResult {
-        // TODO: error when the name is not defined
-        let stack_offset = ctxt.resolve_variable(self.name()).ok_or(())?;
+        let stack_offset = match ctxt.resolve_variable(self.name()) {
+            Some(offset) => offset,
+            None => {
+                println!("Error: symbol `{}` not found", self.name());
+                ctxt.add_anonymous_variable();
+
+                return Err(LoweringError);
+            }
+        };
 
         // TODO: convert stack index to u16
         collector.push(Instruction::push_copy(stack_offset as u16));
@@ -166,6 +180,17 @@ impl Lowerable for Ident {
         Ok(())
     }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub(crate) struct LoweringError;
+
+impl Display for LoweringError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Lowering failed")
+    }
+}
+
+impl Error for LoweringError {}
 
 #[cfg(test)]
 fn lower_expr(expr: &impl Lowerable) -> (Vec<Instruction>, Context) {
@@ -433,5 +458,17 @@ mod ident {
 
         assert_eq!(ctxt.variables_stack_len(), 3);
         assert!(ctxt.variables_stack_top().unwrap().is_empty());
+    }
+
+    #[test]
+    fn fails_when_not_found() {
+        let exp = ExprKind::ident("foo".to_owned());
+        let mut ctxt = Context::new();
+        let mut instructions = Vec::new();
+
+        let rslt = exp.lower(&mut instructions, &mut ctxt);
+
+        assert!(rslt.is_err());
+        assert_eq!(ctxt.variables_stack_len(), 1);
     }
 }

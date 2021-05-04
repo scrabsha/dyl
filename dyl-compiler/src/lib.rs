@@ -1,6 +1,8 @@
-use anyhow::{Context, Result};
-use dyl_bytecode::Instruction;
 use std::path::Path;
+
+use anyhow::{Context, Result};
+
+use dyl_bytecode::Instruction;
 
 mod ast;
 mod context;
@@ -19,7 +21,7 @@ where
 
     let ast = parser::parse_input(content.as_str()).context("Failed to parse program")?;
 
-    let (unresolved_instructions, ctx) = lowering::lower_ast(&ast);
+    let (unresolved_instructions, ctx) = lowering::lower_ast(&ast)?;
 
     let instructions = context::resolve_context(unresolved_instructions.as_slice(), &ctx)?;
 
@@ -39,7 +41,7 @@ where
 
     let ast = parser::parse_input(content.as_str()).context("Failed to parse program")?;
 
-    let (unresolved_instructions, ctx) = lowering::lower_ast(&ast);
+    let (unresolved_instructions, ctx) = lowering::lower_ast(&ast)?;
 
     context::resolve_context(unresolved_instructions.as_slice(), &ctx)
 }

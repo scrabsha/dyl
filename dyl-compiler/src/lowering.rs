@@ -92,9 +92,9 @@ impl Lowerable for If {
     fn lower(&self, collector: &mut Vec<Instruction>, ctxt: &mut Context) -> LoweringResult {
         let condition_exp = self.condition().lower(collector, ctxt);
 
-        let consequent_start = ctxt.new_anonymous_label();
-        let alt_start = ctxt.new_anonymous_label();
-        let consequent_end = ctxt.new_anonymous_label();
+        let consequent_start = ctxt.labels_mut().new_anonymous();
+        let alt_start = ctxt.labels_mut().new_anonymous();
+        let consequent_end = ctxt.labels_mut().new_anonymous();
 
         let cond = Instruction::cond_jmp(consequent_start, alt_start, consequent_start);
         let goto_end = Instruction::goto(consequent_end);
@@ -102,7 +102,8 @@ impl Lowerable for If {
         collector.push(cond);
         ctxt.stack_mut().pop_top_anonymous().unwrap();
 
-        ctxt.set_label_position(consequent_start, collector.len() as u32)
+        ctxt.labels_mut()
+            .set_position(consequent_start, collector.len() as u32)
             .unwrap();
 
         let branches_subcontext = ctxt.stack().new_subcontext();
@@ -113,7 +114,8 @@ impl Lowerable for If {
 
         ctxt.stack_mut().drop_subcontext(branches_subcontext);
 
-        ctxt.set_label_position(alt_start, collector.len() as u32)
+        ctxt.labels_mut()
+            .set_position(alt_start, collector.len() as u32)
             .unwrap();
 
         let alternative_exp = self.alternative().lower(collector, ctxt);
@@ -121,7 +123,8 @@ impl Lowerable for If {
         ctxt.stack_mut().drop_subcontext(branches_subcontext);
         ctxt.stack_mut().push_anonymous();
 
-        ctxt.set_label_position(consequent_end, collector.len() as u32)
+        ctxt.labels_mut()
+            .set_position(consequent_end, collector.len() as u32)
             .unwrap();
 
         condition_exp.and(consequent_exp).and(alternative_exp)
@@ -353,9 +356,9 @@ mod if_ {
     fn label_effects() {
         let (_, ctxt) = lower_expr(&simple_if());
 
-        assert_eq!(ctxt.resolve(0).unwrap(), 2);
-        assert_eq!(ctxt.resolve(1).unwrap(), 4);
-        assert_eq!(ctxt.resolve(2).unwrap(), 5);
+        assert_eq!(ctxt.labels().resolve(0).unwrap(), 2);
+        assert_eq!(ctxt.labels().resolve(1).unwrap(), 4);
+        assert_eq!(ctxt.labels().resolve(2).unwrap(), 5);
     }
 
     #[test]

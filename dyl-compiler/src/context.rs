@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FResult};
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::Result;
 
 use dyl_bytecode::Instruction as ResolvedInstruction;
 
@@ -16,7 +16,7 @@ pub(crate) fn resolve_context(
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct Context {
-    labels: Vec<Option<u32>>,
+    labels: LabelContext,
     stack: StackContext,
 }
 
@@ -25,30 +25,12 @@ impl Context {
         Context::default()
     }
 
-    pub(crate) fn new_anonymous_label(&mut self) -> u32 {
-        let tmp = self.labels.len();
-        self.labels.push(None);
-        tmp as u32
+    pub(crate) fn labels(&self) -> &LabelContext {
+        &self.labels
     }
 
-    pub(crate) fn set_label_position(&mut self, label_id: u32, label_pos: u32) -> Result<()> {
-        match self.labels.get_mut(label_id as usize) {
-            Some(val @ Option::None) => *val = Some(label_pos),
-            Some(Some(previous_label)) => {
-                bail!(DuplicateLabelPosition(label_id, *previous_label, label_pos))
-            }
-            _ => bail!(UnresolvedLabel(label_id)),
-        }
-
-        Ok(())
-    }
-
-    pub(crate) fn resolve(&self, label_id: u32) -> Result<u32> {
-        self.labels
-            .get(label_id as usize)
-            .copied()
-            .flatten()
-            .ok_or_else(|| anyhow!(UnresolvedLabel(label_id)))
+    pub(crate) fn labels_mut(&mut self) -> &mut LabelContext {
+        &mut self.labels
     }
 
     pub(crate) fn stack(&self) -> &StackContext {
@@ -58,6 +40,56 @@ impl Context {
     pub(crate) fn stack_mut(&mut self) -> &mut StackContext {
         &mut self.stack
     }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct LabelContext(Vec<Option<u32>>);
+
+impl LabelContext {
+    pub(crate) fn new_anonymous(&mut self) -> u32 {
+        let tmp = self.0.len();
+        self.0.push(None);
+        tmp as u32
+    }
+
+    pub(crate) fn set_position(
+        &mut self,
+        label_id: u32,
+        pos: u32,
+    ) -> Result<(), LabelDefinitionError> {
+        match self.0.get_mut(label_id as usize) {
+            Some(slot @ Option::None) => {
+                *slot = Some(pos);
+                Ok(())
+            }
+            None => Err(LabelDefinitionError::UnknownLabel),
+            Some(Some(addr)) => Err(LabelDefinitionError::AlreadyDefined(*addr)),
+        }
+    }
+
+    pub(crate) fn resolve(&self, label_id: u32) -> Result<u32, LabelResolutionError> {
+        self.0
+            .get(label_id as usize)
+            .ok_or(LabelResolutionError::UnknownLabel)?
+            .ok_or(LabelResolutionError::UnknownLabelPosition)
+    }
+
+    #[cfg(test)]
+    fn new() -> LabelContext {
+        LabelContext::default()
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub(crate) enum LabelDefinitionError {
+    AlreadyDefined(u32),
+    UnknownLabel,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub(crate) enum LabelResolutionError {
+    UnknownLabel,
+    UnknownLabelPosition,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -181,11 +213,11 @@ mod anonymous_labels {
 
     #[test]
     fn grow_continuously() {
-        let mut ctxt = Context::new();
+        let mut ctxt = LabelContext::new();
         let (a, b, c) = (
-            ctxt.new_anonymous_label(),
-            ctxt.new_anonymous_label(),
-            ctxt.new_anonymous_label(),
+            ctxt.new_anonymous(),
+            ctxt.new_anonymous(),
+            ctxt.new_anonymous(),
         );
 
         assert_eq!(a, 0);
@@ -200,35 +232,41 @@ mod labels {
 
     #[test]
     fn set_label_position_when_undefined() {
-        let mut ctxt = Context::new();
-        let a = ctxt.new_anonymous_label();
-        assert!(ctxt.set_label_position(a, 101).is_ok());
+        let mut ctxt = LabelContext::new();
+        let a = ctxt.new_anonymous();
+        assert!(ctxt.set_position(a, 101).is_ok());
     }
 
     #[test]
     fn set_label_position_when_already_defined() {
-        let mut ctxt = Context::new();
-        let a = ctxt.new_anonymous_label();
-        ctxt.set_label_position(a, 101).unwrap();
+        let mut ctxt = LabelContext::new();
+        let a = ctxt.new_anonymous();
+        ctxt.set_position(a, 101).unwrap();
 
-        assert!(ctxt.set_label_position(a, 13).is_err());
+        assert_eq!(
+            ctxt.set_position(a, 13),
+            Err(LabelDefinitionError::AlreadyDefined(101))
+        );
     }
 
     #[test]
     fn resolve_anonymous_defined() {
-        let mut ctxt = Context::new();
-        let a = ctxt.new_anonymous_label();
-        ctxt.set_label_position(a, 42).unwrap();
+        let mut ctxt = LabelContext::new();
+        let a = ctxt.new_anonymous();
+        ctxt.set_position(a, 42).unwrap();
 
-        assert_eq!(ctxt.resolve(a).unwrap(), 42);
+        assert_eq!(ctxt.resolve(a), Ok(42));
     }
 
     #[test]
     fn resolve_anonymous_undefined() {
-        let mut ctxt = Context::new();
-        let a = ctxt.new_anonymous_label();
+        let mut ctxt = LabelContext::new();
+        let a = ctxt.new_anonymous();
 
-        assert!(ctxt.resolve(a).is_err());
+        assert_eq!(
+            ctxt.resolve(a),
+            Err(LabelResolutionError::UnknownLabelPosition)
+        );
     }
 }
 

@@ -1,4 +1,4 @@
-use anyhow::{Context as AnyContext, Result};
+use anyhow::Result;
 
 use dyl_bytecode::operations as resolved_operations;
 use dyl_bytecode::Instruction as ResolvedInstruction;
@@ -167,16 +167,19 @@ impl Resolvable for CondJmp {
         let CondJmp(neg, null, pos) = *self;
 
         let negative_addr = ctxt
+            .labels()
             .resolve(neg)
-            .with_context(|| format!("Failed to resolve negative address value of id `{}`", neg))?;
+            .expect("Failed to resolve negative address value");
 
         let null_addr = ctxt
+            .labels()
             .resolve(null)
-            .with_context(|| format!("Failed to resolve null address value of id `{}`", null))?;
+            .expect("Failed to resolve null address value");
 
         let positive_addr = ctxt
+            .labels()
             .resolve(pos)
-            .with_context(|| format!("Failed to resolve positive address value of id `{}`", pos))?;
+            .expect("Failed to resolve positive address value");
 
         Ok(resolved_operations::CondJmp {
             negative_addr,
@@ -194,8 +197,9 @@ impl Resolvable for Goto {
 
     fn resolve(&self, ctxt: &Context) -> Result<Self::Output> {
         let dest = ctxt
+            .labels()
             .resolve(self.0)
-            .context("Failed to get goto destination")?;
+            .expect("Failed to resolve goto destination");
 
         Ok(resolved_operations::Goto(dest))
     }

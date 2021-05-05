@@ -110,9 +110,9 @@ fn star(input: &str) -> IResult<&str, ()> {
 fn if_else(input: &str) -> IResult<&str, ExprKind> {
     let (tail, _) = if_(input)?;
     let (tail, condition) = expr(tail)?;
-    let (tail, consequent) = delimited(left_curly, expr, right_curly)(tail)?;
+    let (tail, consequent) = block(tail)?;
     let (tail, _) = else_(tail)?;
-    let (tail, alternative) = delimited(left_curly, expr, right_curly)(tail)?;
+    let (tail, alternative) = block(tail)?;
 
     let if_ = ExprKind::if_(condition, consequent, alternative);
     Ok((tail, if_))
@@ -501,6 +501,21 @@ mod if_else {
                 ExprKind::integer(1),
                 ExprKind::integer(1),
             ),
+        ));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn bindings_as_consequent_and_alternative() {
+        let left = if_else("if 1 { let a = 0; a } else { let a = 0; a }");
+        let inner_bindings = ExprKind::bindings(
+            vec![Binding::new("a".to_owned(), ExprKind::integer(0))],
+            ExprKind::ident("a".to_owned()),
+        );
+        let right = Ok((
+            "",
+            ExprKind::if_(ExprKind::integer(1), inner_bindings.clone(), inner_bindings),
         ));
 
         assert_eq!(left, right);

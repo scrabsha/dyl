@@ -1,3 +1,8 @@
+use std::{
+    cell::RefCell,
+    fmt::{Display, Formatter, Result as FmtResult},
+};
+
 use dyl_bytecode::Instruction as ResolvedInstruction;
 
 use crate::instruction::Instruction;
@@ -13,6 +18,7 @@ pub(crate) fn resolve_context(
 pub(crate) struct Context {
     labels: LabelContext,
     stack: StackContext,
+    errs: ErrorContext,
 }
 
 impl Context {
@@ -34,6 +40,10 @@ impl Context {
 
     pub(crate) fn stack_mut(&mut self) -> &mut StackContext {
         &mut self.stack
+    }
+
+    pub(crate) fn errors(&self) -> &ErrorContext {
+        &self.errs
     }
 }
 
@@ -170,6 +180,55 @@ pub(crate) enum AnonymousNamingError {
 pub(crate) enum AnonymousPoppingError {
     EmptyStack,
     NotAnonymous,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct ErrorContext(RefCell<Vec<CompilationError>>);
+
+impl ErrorContext {
+    pub(crate) fn add(&self, e: impl Into<CompilationError>) {
+        self.0.borrow_mut().push(e.into());
+    }
+
+    pub(crate) fn emit(&self) {
+        eprintln!("{}", self)
+    }
+
+    #[cfg(test)]
+    fn new() -> ErrorContext {
+        ErrorContext::default()
+    }
+}
+
+impl Display for ErrorContext {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        self.0
+            .borrow()
+            .iter()
+            .try_for_each(|e| writeln!(f, "{}", e))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CompilationError(String);
+
+impl From<String> for CompilationError {
+    fn from(input: String) -> Self {
+        CompilationError(input)
+    }
+}
+
+impl From<&str> for CompilationError {
+    fn from(input: &str) -> Self {
+        let input = input.to_owned();
+        CompilationError::from(input)
+    }
+}
+
+impl Display for CompilationError {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        self.0.fmt(f)
+    }
 }
 
 pub(crate) trait Resolvable {
@@ -354,5 +413,22 @@ mod variables {
             ctxt.name_top_anonymous("bar".to_owned()),
             Err(AnonymousNamingError::NotAnonymous)
         );
+    }
+}
+
+#[cfg(test)]
+mod errors {
+    use super::*;
+
+    #[test]
+    fn creation_addition_display() {
+        let errs = ErrorContext::new();
+        errs.add("Hello");
+        errs.add("World");
+
+        let left = errs.to_string();
+        let right = "Hello\nWorld\n";
+
+        assert_eq!(left, right);
     }
 }

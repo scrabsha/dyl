@@ -9,15 +9,15 @@ use crate::{
     instruction::Instruction,
 };
 
-pub(crate) fn lower_ast(ast: &ExprKind) -> Result<(Vec<Instruction>, Context), LoweringError> {
+pub(crate) fn lower_ast(ast: &ExprKind) -> (Vec<Instruction>, Context, Result<(), LoweringError>) {
     let mut tmp = Vec::new();
     let mut ctxt = Context::new();
 
-    ast.lower(&mut tmp, &mut ctxt).map_err(|_| LoweringError)?;
+    let lowering_status = ast.lower(&mut tmp, &mut ctxt).map_err(|_| LoweringError);
 
     tmp.push(Instruction::f_stop());
 
-    Ok((tmp, ctxt))
+    (tmp, ctxt, lowering_status)
 }
 
 trait Lowerable {
@@ -170,7 +170,9 @@ impl Lowerable for Ident {
         let stack_offset = match ctxt.stack().resolve(self.name()) {
             Some(offset) => offset,
             None => {
-                println!("Error: symbol `{}` not found", self.name());
+                ctxt.errors()
+                    .add(format!("Undefined variable `{}`", self.name()));
+
                 ctxt.stack_mut().push_anonymous();
 
                 return Err(LoweringError);
@@ -404,6 +406,27 @@ mod bindings {
         assert_eq!(ctxt.stack().depth(), 1);
         assert!(ctxt.stack().top().unwrap().is_empty());
     }
+
+    #[test]
+    fn recovers_from_error() {
+        let expr = ExprKind::bindings(
+            vec![
+                Binding::new("a".to_owned(), ExprKind::ident("b".to_owned())),
+                Binding::new("c".to_owned(), ExprKind::ident("d".to_owned())),
+            ],
+            ExprKind::ident("e".to_owned()),
+        );
+        let mut ctxt = Context::new();
+        let mut instructions = Vec::new();
+
+        let rslt = expr.lower(&mut instructions, &mut ctxt);
+
+        assert!(rslt.is_err());
+        assert_eq!(
+            ctxt.errors().to_string(),
+            "Undefined variable `b`\nUndefined variable `d`\nUndefined variable `e`\n"
+        )
+    }
 }
 
 #[cfg(test)]
@@ -475,5 +498,20 @@ mod ident {
 
         assert!(rslt.is_err());
         assert_eq!(ctxt.stack().depth(), 1);
+    }
+
+    #[test]
+    fn emits_when_not_found() {
+        let exp = ExprKind::ident("undefined".to_owned());
+        let mut ctxt = Context::new();
+        let mut instructions = Vec::new();
+
+        let rslt = exp.lower(&mut instructions, &mut ctxt);
+
+        assert!(rslt.is_err());
+        assert_eq!(
+            ctxt.errors().to_string(),
+            "Undefined variable `undefined`\n"
+        );
     }
 }

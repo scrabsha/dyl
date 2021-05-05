@@ -23,7 +23,7 @@ where
 
     let (unresolved_instructions, ctx) = lowering::lower_ast(&ast)?;
 
-    let instructions = context::resolve_context(unresolved_instructions.as_slice(), &ctx)?;
+    let instructions = context::resolve_context(unresolved_instructions.as_slice(), &ctx);
 
     let output = Instruction::encode_multiple(&instructions);
 
@@ -43,5 +43,7 @@ where
 
     let (unresolved_instructions, ctx) = lowering::lower_ast(&ast)?;
 
-    context::resolve_context(unresolved_instructions.as_slice(), &ctx)
+    let final_instructions = context::resolve_context(unresolved_instructions.as_slice(), &ctx);
+
+    Ok(final_instructions)
 }

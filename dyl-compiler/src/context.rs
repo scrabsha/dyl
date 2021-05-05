@@ -1,8 +1,3 @@
-use std::error::Error;
-use std::fmt::{Display, Formatter, Result as FResult};
-
-use anyhow::Result;
-
 use dyl_bytecode::Instruction as ResolvedInstruction;
 
 use crate::instruction::Instruction;
@@ -10,7 +5,7 @@ use crate::instruction::Instruction;
 pub(crate) fn resolve_context(
     instructions: &[Instruction],
     ctxt: &Context,
-) -> Result<Vec<ResolvedInstruction>> {
+) -> Vec<ResolvedInstruction> {
     instructions.iter().map(|i| i.resolve(ctxt)).collect()
 }
 
@@ -180,31 +175,7 @@ pub(crate) enum AnonymousPoppingError {
 pub(crate) trait Resolvable {
     type Output;
 
-    fn resolve(&self, ctxt: &Context) -> Result<Self::Output>;
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-struct UnresolvedLabel(u32);
-
-impl Display for UnresolvedLabel {
-    fn fmt(&self, f: &mut Formatter) -> FResult {
-        write!(f, "Label `{}` is used but never declared", self.0)
-    }
-}
-
-impl Error for UnresolvedLabel {}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-struct DuplicateLabelPosition(u32, u32, u32);
-
-impl Display for DuplicateLabelPosition {
-    fn fmt(&self, f: &mut Formatter) -> FResult {
-        write!(
-            f,
-            "Label `{}` is positioned at `{}` and at `{}`",
-            self.0, self.1, self.2
-        )
-    }
+    fn resolve(&self, ctxt: &Context) -> Self::Output;
 }
 
 #[cfg(test)]

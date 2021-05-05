@@ -1,5 +1,3 @@
-use anyhow::Result;
-
 use dyl_bytecode::operations as resolved_operations;
 use dyl_bytecode::Instruction as ResolvedInstruction;
 
@@ -95,10 +93,8 @@ impl Instruction {
 impl Resolvable for Instruction {
     type Output = ResolvedInstruction;
 
-    fn resolve(&self, ctxt: &Context) -> Result<Self::Output> {
-        map_instruction!(self, |instruction| instruction
-            .resolve(ctxt)
-            .map(Into::into))
+    fn resolve(&self, ctxt: &Context) -> Self::Output {
+        map_instruction!(self, |instruction| instruction.resolve(ctxt).into())
     }
 }
 
@@ -108,8 +104,8 @@ pub(crate) struct PushI(pub i32);
 impl Resolvable for PushI {
     type Output = resolved_operations::PushI;
 
-    fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
-        Ok(resolved_operations::PushI(self.0))
+    fn resolve(&self, _ctxt: &Context) -> Self::Output {
+        resolved_operations::PushI(self.0)
     }
 }
 
@@ -119,8 +115,8 @@ pub(crate) struct AddI;
 impl Resolvable for AddI {
     type Output = resolved_operations::AddI;
 
-    fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
-        Ok(resolved_operations::AddI)
+    fn resolve(&self, _ctxt: &Context) -> Self::Output {
+        resolved_operations::AddI
     }
 }
 
@@ -130,8 +126,8 @@ pub(crate) struct Mul;
 impl Resolvable for Mul {
     type Output = resolved_operations::Mul;
 
-    fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
-        Ok(resolved_operations::Mul)
+    fn resolve(&self, _ctxt: &Context) -> Self::Output {
+        resolved_operations::Mul
     }
 }
 
@@ -141,8 +137,8 @@ pub(crate) struct FStop;
 impl Resolvable for FStop {
     type Output = resolved_operations::FStop;
 
-    fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
-        Ok(resolved_operations::FStop)
+    fn resolve(&self, _ctxt: &Context) -> Self::Output {
+        resolved_operations::FStop
     }
 }
 
@@ -152,8 +148,8 @@ pub(crate) struct Neg;
 impl Resolvable for Neg {
     type Output = resolved_operations::Neg;
 
-    fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
-        Ok(resolved_operations::Neg)
+    fn resolve(&self, _ctxt: &Context) -> Self::Output {
+        resolved_operations::Neg
     }
 }
 
@@ -163,7 +159,7 @@ pub(crate) struct CondJmp(pub u32, pub u32, pub u32);
 impl Resolvable for CondJmp {
     type Output = resolved_operations::CondJmp;
 
-    fn resolve(&self, ctxt: &Context) -> Result<Self::Output> {
+    fn resolve(&self, ctxt: &Context) -> Self::Output {
         let CondJmp(neg, null, pos) = *self;
 
         let negative_addr = ctxt
@@ -181,11 +177,11 @@ impl Resolvable for CondJmp {
             .resolve(pos)
             .expect("Failed to resolve positive address value");
 
-        Ok(resolved_operations::CondJmp {
+        resolved_operations::CondJmp {
             negative_addr,
             null_addr,
             positive_addr,
-        })
+        }
     }
 }
 
@@ -195,13 +191,13 @@ pub(crate) struct Goto(pub u32);
 impl Resolvable for Goto {
     type Output = resolved_operations::Goto;
 
-    fn resolve(&self, ctxt: &Context) -> Result<Self::Output> {
+    fn resolve(&self, ctxt: &Context) -> Self::Output {
         let dest = ctxt
             .labels()
             .resolve(self.0)
             .expect("Failed to resolve goto destination");
 
-        Ok(resolved_operations::Goto(dest))
+        resolved_operations::Goto(dest)
     }
 }
 
@@ -211,8 +207,8 @@ pub(crate) struct PopCopy(pub u16);
 impl Resolvable for PopCopy {
     type Output = resolved_operations::PopCopy;
 
-    fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
-        Ok(resolved_operations::PopCopy(self.0))
+    fn resolve(&self, _ctxt: &Context) -> Self::Output {
+        resolved_operations::PopCopy(self.0)
     }
 }
 
@@ -222,8 +218,8 @@ pub(crate) struct Pop(pub u16);
 impl Resolvable for Pop {
     type Output = resolved_operations::Pop;
 
-    fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
-        Ok(resolved_operations::Pop(self.0))
+    fn resolve(&self, _ctxt: &Context) -> Self::Output {
+        resolved_operations::Pop(self.0)
     }
 }
 
@@ -233,7 +229,7 @@ pub(crate) struct PushCopy(pub u16);
 impl Resolvable for PushCopy {
     type Output = resolved_operations::PushCopy;
 
-    fn resolve(&self, _ctxt: &Context) -> Result<Self::Output> {
-        Ok(resolved_operations::PushCopy(self.0))
+    fn resolve(&self, _ctxt: &Context) -> Self::Output {
+        resolved_operations::PushCopy(self.0)
     }
 }

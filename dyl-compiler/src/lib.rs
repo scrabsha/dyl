@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 
 use dyl_bytecode::Instruction;
 
@@ -19,16 +19,22 @@ where
     let content = io::read_program(i.as_ref())
         .with_context(|| format!("Failed to read input file `{}`", i.as_ref().display()))?;
 
-    let ast = parser::parse_input(content.as_str()).context("Failed to parse program")?;
+    let (ast, ctxt) = parser::parse_input(content.as_str());
+    let ast = ast.map_err(|e| {
+        ctxt.errors().emit();
+        e
+    })?;
 
-    let (unresolved_instructions, ctx, lowering_status) = lowering::lower_ast(&ast);
+    let mut ctxt = ctxt.into_lowering_context();
 
-    if let Err(e) = lowering_status {
-        ctx.errors().emit();
-        bail!(e)
-    }
+    let instructions = lowering::lower_ast(&ast, &mut ctxt);
 
-    let instructions = context::resolve_context(unresolved_instructions.as_slice(), &ctx);
+    let instructions = instructions.map_err(|e| {
+        ctxt.errors().emit();
+        e
+    })?;
+
+    let instructions = context::resolve_context(instructions.as_slice(), &ctxt);
 
     let output = Instruction::encode_multiple(&instructions);
 
@@ -44,16 +50,22 @@ where
     let content = io::read_program(path.as_ref())
         .with_context(|| format!("Failed to read input file `{}`", path.as_ref().display()))?;
 
-    let ast = parser::parse_input(content.as_str()).context("Failed to parse program")?;
+    let (ast, ctxt) = parser::parse_input(content.as_str());
+    let ast = ast.map_err(|e| {
+        ctxt.errors().emit();
+        e
+    })?;
 
-    let (unresolved_instructions, ctx, lowering_status) = lowering::lower_ast(&ast);
+    let mut ctxt = ctxt.into_lowering_context();
 
-    if let Err(e) = lowering_status {
-        ctx.errors().emit();
-        bail!(e);
-    }
+    let instructions = lowering::lower_ast(&ast, &mut ctxt);
 
-    let final_instructions = context::resolve_context(unresolved_instructions.as_slice(), &ctx);
+    let instructions = instructions.map_err(|e| {
+        ctxt.errors().emit();
+        e
+    })?;
+
+    let final_instructions = context::resolve_context(instructions.as_slice(), &ctxt);
 
     Ok(final_instructions)
 }

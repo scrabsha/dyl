@@ -1,7 +1,7 @@
 use dyl_bytecode::operations as resolved_operations;
 use dyl_bytecode::Instruction as ResolvedInstruction;
 
-use crate::context::{Context, Resolvable};
+use crate::context::{LoweringContext, Resolvable};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub(crate) enum Instruction {
@@ -93,7 +93,7 @@ impl Instruction {
 impl Resolvable for Instruction {
     type Output = ResolvedInstruction;
 
-    fn resolve(&self, ctxt: &Context) -> Self::Output {
+    fn resolve(&self, ctxt: &LoweringContext) -> Self::Output {
         map_instruction!(self, |instruction| instruction.resolve(ctxt).into())
     }
 }
@@ -104,7 +104,7 @@ pub(crate) struct PushI(pub i32);
 impl Resolvable for PushI {
     type Output = resolved_operations::PushI;
 
-    fn resolve(&self, _ctxt: &Context) -> Self::Output {
+    fn resolve(&self, _ctxt: &LoweringContext) -> Self::Output {
         resolved_operations::PushI(self.0)
     }
 }
@@ -115,7 +115,7 @@ pub(crate) struct AddI;
 impl Resolvable for AddI {
     type Output = resolved_operations::AddI;
 
-    fn resolve(&self, _ctxt: &Context) -> Self::Output {
+    fn resolve(&self, _ctxt: &LoweringContext) -> Self::Output {
         resolved_operations::AddI
     }
 }
@@ -126,7 +126,7 @@ pub(crate) struct Mul;
 impl Resolvable for Mul {
     type Output = resolved_operations::Mul;
 
-    fn resolve(&self, _ctxt: &Context) -> Self::Output {
+    fn resolve(&self, _ctxt: &LoweringContext) -> Self::Output {
         resolved_operations::Mul
     }
 }
@@ -137,7 +137,7 @@ pub(crate) struct FStop;
 impl Resolvable for FStop {
     type Output = resolved_operations::FStop;
 
-    fn resolve(&self, _ctxt: &Context) -> Self::Output {
+    fn resolve(&self, _ctxt: &LoweringContext) -> Self::Output {
         resolved_operations::FStop
     }
 }
@@ -148,7 +148,7 @@ pub(crate) struct Neg;
 impl Resolvable for Neg {
     type Output = resolved_operations::Neg;
 
-    fn resolve(&self, _ctxt: &Context) -> Self::Output {
+    fn resolve(&self, _ctxt: &LoweringContext) -> Self::Output {
         resolved_operations::Neg
     }
 }
@@ -159,7 +159,7 @@ pub(crate) struct CondJmp(pub u32, pub u32, pub u32);
 impl Resolvable for CondJmp {
     type Output = resolved_operations::CondJmp;
 
-    fn resolve(&self, ctxt: &Context) -> Self::Output {
+    fn resolve(&self, ctxt: &LoweringContext) -> Self::Output {
         let CondJmp(neg, null, pos) = *self;
 
         let negative_addr = ctxt
@@ -191,7 +191,7 @@ pub(crate) struct Goto(pub u32);
 impl Resolvable for Goto {
     type Output = resolved_operations::Goto;
 
-    fn resolve(&self, ctxt: &Context) -> Self::Output {
+    fn resolve(&self, ctxt: &LoweringContext) -> Self::Output {
         let dest = ctxt
             .labels()
             .resolve(self.0)
@@ -207,7 +207,7 @@ pub(crate) struct PopCopy(pub u16);
 impl Resolvable for PopCopy {
     type Output = resolved_operations::PopCopy;
 
-    fn resolve(&self, _ctxt: &Context) -> Self::Output {
+    fn resolve(&self, _ctxt: &LoweringContext) -> Self::Output {
         resolved_operations::PopCopy(self.0)
     }
 }
@@ -218,7 +218,7 @@ pub(crate) struct Pop(pub u16);
 impl Resolvable for Pop {
     type Output = resolved_operations::Pop;
 
-    fn resolve(&self, _ctxt: &Context) -> Self::Output {
+    fn resolve(&self, _ctxt: &LoweringContext) -> Self::Output {
         resolved_operations::Pop(self.0)
     }
 }
@@ -229,7 +229,7 @@ pub(crate) struct PushCopy(pub u16);
 impl Resolvable for PushCopy {
     type Output = resolved_operations::PushCopy;
 
-    fn resolve(&self, _ctxt: &Context) -> Self::Output {
+    fn resolve(&self, _ctxt: &LoweringContext) -> Self::Output {
         resolved_operations::PushCopy(self.0)
     }
 }

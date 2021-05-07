@@ -9,21 +9,45 @@ use crate::instruction::Instruction;
 
 pub(crate) fn resolve_context(
     instructions: &[Instruction],
-    ctxt: &Context,
+    ctxt: &LoweringContext,
 ) -> Vec<ResolvedInstruction> {
     instructions.iter().map(|i| i.resolve(ctxt)).collect()
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct Context {
+pub(crate) struct ParsingContext {
+    errs: ErrorContext,
+}
+
+impl ParsingContext {
+    pub(crate) fn new() -> ParsingContext {
+        ParsingContext::default()
+    }
+
+    pub(crate) fn errors(&self) -> &ErrorContext {
+        &self.errs
+    }
+
+    pub(crate) fn into_lowering_context(self) -> LoweringContext {
+        let errs = self.errs;
+
+        LoweringContext {
+            errs,
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct LoweringContext {
     labels: LabelContext,
     stack: StackContext,
     errs: ErrorContext,
 }
 
-impl Context {
-    pub(crate) fn new() -> Context {
-        Context::default()
+impl LoweringContext {
+    pub(crate) fn new() -> LoweringContext {
+        LoweringContext::default()
     }
 
     pub(crate) fn labels(&self) -> &LabelContext {
@@ -234,7 +258,7 @@ impl Display for CompilationError {
 pub(crate) trait Resolvable {
     type Output;
 
-    fn resolve(&self, ctxt: &Context) -> Self::Output;
+    fn resolve(&self, ctxt: &LoweringContext) -> Self::Output;
 }
 
 #[cfg(test)]

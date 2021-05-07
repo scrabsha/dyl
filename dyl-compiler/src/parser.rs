@@ -1,19 +1,27 @@
 use anyhow::{ensure, Error, Result as AnyResult};
 use nom::{
     branch::alt,
-    bytes::complete::tag,
-    character::complete::{alpha1, alphanumeric1, digit1, multispace0},
+    bytes::complete::tag as nom_tag,
+    character::complete::{
+        alpha1 as nom_alpha1, alphanumeric1 as nom_alphanumeric1, digit1, multispace0,
+    },
     combinator::{map, opt, recognize},
     error::{Error as NomError, ErrorKind, ParseError},
     multi::{fold_many1, many0, many1},
     sequence::{delimited, pair, preceded, terminated, tuple},
-    Err, IResult, Parser,
+    Err, Parser,
+};
+use nom_locate::LocatedSpan;
+
+use crate::{
+    ast::{Binding, ExprKind},
+    context::ParsingContext,
 };
 
-use crate::ast::{Binding, ExprKind};
-
-pub(crate) fn parse_input(input_code: &str) -> AnyResult<ExprKind> {
-    program(input_code)
+pub(crate) fn parse_input(input_code: &str) -> (AnyResult<ExprKind>, ParsingContext) {
+    let parsing_ctxt = ParsingContext::new();
+    let input = LocatedSpan::new_extra(input_code, &parsing_ctxt);
+    let parsing_status = program(input)
         .map_err(own_nom_err)
         .map_err(Error::new)
         .and_then(|(tail, expr)| {
@@ -23,10 +31,12 @@ pub(crate) fn parse_input(input_code: &str) -> AnyResult<ExprKind> {
                 tail
             );
             Ok(expr)
-        })
+        });
+
+    (parsing_status, parsing_ctxt)
 }
 
-fn own_nom_err(err: Err<nom::error::Error<&str>>) -> Err<nom::error::Error<String>> {
+fn own_nom_err(err: Err<nom::error::Error<Input>>) -> Err<nom::error::Error<()>> {
     match err {
         Err::Error(e) => Err::Error(own_nom_error(e)),
         Err::Failure(f) => Err::Failure(own_nom_error(f)),
@@ -34,34 +44,37 @@ fn own_nom_err(err: Err<nom::error::Error<&str>>) -> Err<nom::error::Error<Strin
     }
 }
 
-fn own_nom_error(err: NomError<&str>) -> NomError<String> {
-    let NomError { input, code } = err;
-    let input: String = input.to_owned();
+fn own_nom_error(err: NomError<Input>) -> NomError<()> {
+    let NomError { code, .. } = err;
+    let input = ();
     NomError { input, code }
 }
 
-fn program(input: &str) -> IResult<&str, ExprKind> {
+type Input<'a> = LocatedSpan<&'a str, &'a ParsingContext>;
+type IResult<'a, O, E = NomError<Input<'a>>> = nom::IResult<Input<'a>, O, E>;
+
+fn program(input: Input) -> IResult<ExprKind> {
     alt((bindings, expr))(input)
 }
 
-fn block(input: &str) -> IResult<&str, ExprKind> {
+fn block(input: Input) -> IResult<ExprKind> {
     delimited(left_curly, alt((bindings, expr)), right_curly)(input)
 }
 
-fn expr(input: &str) -> IResult<&str, ExprKind> {
+fn expr(input: Input) -> IResult<ExprKind> {
     alt((level_0_expression, level_1_expression, atomic_expr))(input)
 }
 
-fn integer(input: &str) -> IResult<&str, ExprKind> {
+fn integer(input: Input) -> IResult<ExprKind> {
     let maybe_minus = opt(tag("-"));
 
     map(
         space_insignificant(recognize(tuple((maybe_minus, digit1)))),
-        |i: &str| ExprKind::integer(i.parse().unwrap()),
+        |i| ExprKind::integer(i.fragment().parse().unwrap()),
     )(input)
 }
 
-fn level_0_expression(input: &str) -> IResult<&str, ExprKind> {
+fn level_0_expression(input: Input) -> IResult<ExprKind> {
     let (tail, first) = alt((level_1_expression, atomic_expr))(input)?;
 
     fold_many1(
@@ -71,7 +84,7 @@ fn level_0_expression(input: &str) -> IResult<&str, ExprKind> {
     )(tail)
 }
 
-fn level_0_operator(input: &str) -> IResult<&str, Level0Operator> {
+fn level_0_operator(input: Input) -> IResult<Level0Operator> {
     map(alt((tag("+"), tag("-"))), |operator| match operator {
         "+" => Level0Operator::Plus,
         "-" => Level0Operator::Minus,
@@ -96,18 +109,18 @@ impl Level0Operator {
     }
 }
 
-fn level_1_expression(input: &str) -> IResult<&str, ExprKind> {
+fn level_1_expression(input: Input) -> IResult<ExprKind> {
     let (tail, first) = atomic_expr(input)?;
     fold_many1(tuple((star, atomic_expr)), first, |lhs, (_, rhs)| {
         ExprKind::multiplication(lhs, rhs)
     })(tail)
 }
 
-fn star(input: &str) -> IResult<&str, ()> {
+fn star(input: Input) -> IResult<()> {
     map(space_insignificant(tag("*")), drop)(input)
 }
 
-fn if_else(input: &str) -> IResult<&str, ExprKind> {
+fn if_else(input: Input) -> IResult<ExprKind> {
     let (tail, _) = if_(input)?;
     let (tail, condition) = expr(tail)?;
     let (tail, consequent) = block(tail)?;
@@ -118,7 +131,7 @@ fn if_else(input: &str) -> IResult<&str, ExprKind> {
     Ok((tail, if_))
 }
 
-fn bindings(input: &str) -> IResult<&str, ExprKind> {
+fn bindings(input: Input) -> IResult<ExprKind> {
     let (tail, bs) = many1(binding)(input)?;
     let (tail, ending) = expr(tail)?;
     let bindings = ExprKind::bindings(bs, ending);
@@ -126,22 +139,22 @@ fn bindings(input: &str) -> IResult<&str, ExprKind> {
     Ok((tail, bindings))
 }
 
-fn binding(input: &str) -> IResult<&str, Binding> {
+fn binding(input: Input) -> IResult<Binding> {
     let (tail, name) = delimited(let_, ident, equal)(input)?;
     let (tail, value) = terminated(expr, semicolon)(tail)?;
     Ok((tail, Binding::new(name, value)))
 }
 
-fn atomic_expr(input: &str) -> IResult<&str, ExprKind> {
+fn atomic_expr(input: Input) -> IResult<ExprKind> {
     alt((integer, if_else, block, ident_expr))(input)
 }
 
-fn ident_expr(input: &str) -> IResult<&str, ExprKind> {
+fn ident_expr(input: Input) -> IResult<ExprKind> {
     let (tail, name) = ident(input)?;
     Ok((tail, ExprKind::ident(name)))
 }
 
-fn ident(input: &str) -> IResult<&str, String> {
+fn ident(input: Input) -> IResult<String> {
     let (tail, name) = space_insignificant(recognize(pair(
         alt((alpha1, tag("_"))),
         many0(alt((alphanumeric1, tag("_")))),
@@ -150,27 +163,27 @@ fn ident(input: &str) -> IResult<&str, String> {
     Ok((tail, name.to_string()))
 }
 
-fn if_(input: &str) -> IResult<&str, ()> {
+fn if_(input: Input) -> IResult<()> {
     keyword("if")(input)
 }
 
-fn else_(input: &str) -> IResult<&str, ()> {
+fn else_(input: Input) -> IResult<()> {
     keyword("else")(input)
 }
 
-fn let_(input: &str) -> IResult<&str, ()> {
+fn let_(input: Input) -> IResult<()> {
     keyword("let")(input)
 }
 
-fn equal(input: &str) -> IResult<&str, ()> {
+fn equal(input: Input) -> IResult<()> {
     map(space_insignificant(tag("=")), drop)(input)
 }
 
-fn semicolon(input: &str) -> IResult<&str, ()> {
+fn semicolon(input: Input) -> IResult<()> {
     map(space_insignificant(tag(";")), drop)(input)
 }
 
-fn keyword(kw: &str) -> impl Fn(&str) -> IResult<&str, ()> + '_ {
+fn keyword(kw: &str) -> impl Fn(Input) -> IResult<()> + '_ {
     move |input| {
         let (tail, _) = map(preceded(multispace0, tag(kw)), drop)(input)?;
         let next_is_alphabetic = tail
@@ -188,21 +201,60 @@ fn keyword(kw: &str) -> impl Fn(&str) -> IResult<&str, ()> + '_ {
     }
 }
 
-fn left_curly(input: &str) -> IResult<&str, ()> {
+fn left_curly(input: Input) -> IResult<()> {
     map(space_insignificant(tag("{")), drop)(input)
 }
 
-fn right_curly(input: &str) -> IResult<&str, ()> {
+fn right_curly(input: Input) -> IResult<()> {
     map(space_insignificant(tag("}")), drop)(input)
 }
 
 fn space_insignificant<'a, O, E>(
-    parser: impl Parser<&'a str, O, E>,
-) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
+    parser: impl Parser<Input<'a>, O, E>,
+) -> impl FnMut(Input<'a>) -> IResult<'a, O, E>
 where
-    E: ParseError<&'a str>,
+    E: ParseError<Input<'a>>,
 {
     delimited(multispace0, parser, multispace0)
+}
+
+fn tag<'a>(t: &'a str) -> impl FnMut(Input) -> IResult<&str> + 'a {
+    move |input: Input| {
+        map(nom_tag(t), |matched: LocatedSpan<&str, _>| {
+            *matched.fragment()
+        })(input)
+    }
+}
+
+fn alphanumeric1(input: Input) -> IResult<&str> {
+    map(nom_alphanumeric1, |matched: LocatedSpan<&str, _>| {
+        *matched.fragment()
+    })(input)
+}
+
+fn alpha1(input: Input) -> IResult<&str> {
+    map(nom_alpha1, |matched: LocatedSpan<&str, _>| {
+        *matched.fragment()
+    })(input)
+}
+
+#[cfg(test)]
+fn parse_and_own<O>(
+    f: impl Fn(Input) -> IResult<O>,
+    input: &str,
+) -> (Result<O, Err<NomError<()>>>, ParsingContext) {
+    let parsing_ctxt = ParsingContext::new();
+    let input = LocatedSpan::new_extra(input, &parsing_ctxt);
+    let parsing_status = f(input).map_err(own_nom_err).map(|(_, parsed)| parsed);
+
+    (parsing_status, parsing_ctxt)
+}
+
+#[cfg(test)]
+macro_rules! parse {
+    ($rule:ident $slice:expr) => {{
+        parse_and_own($rule, $slice)
+    }};
 }
 
 #[cfg(test)]
@@ -213,18 +265,15 @@ mod program {
 
     #[test]
     fn handles_bindings() {
-        let left = program("let a = 40; let b = 2; a + b");
-        let right = Ok((
-            "",
-            ExprKind::bindings(
-                vec![
-                    Binding::new("a".to_owned(), ExprKind::integer(40)),
-                    Binding::new("b".to_owned(), ExprKind::integer(2)),
-                ],
-                ExprKind::addition(
-                    ExprKind::ident("a".to_owned()),
-                    ExprKind::ident("b".to_owned()),
-                ),
+        let (left, _) = parse! { program "let a = 40; let b = 2; a + b" };
+        let right = Ok(ExprKind::bindings(
+            vec![
+                Binding::new("a".to_owned(), ExprKind::integer(40)),
+                Binding::new("b".to_owned(), ExprKind::integer(2)),
+            ],
+            ExprKind::addition(
+                ExprKind::ident("a".to_owned()),
+                ExprKind::ident("b".to_owned()),
             ),
         ));
 
@@ -233,13 +282,10 @@ mod program {
 
     #[test]
     fn handles_expression() {
-        let left = program("1 + 2 + 2");
-        let right = Ok((
-            "",
-            ExprKind::addition(
-                ExprKind::addition(ExprKind::integer(1), ExprKind::integer(2)),
-                ExprKind::integer(2),
-            ),
+        let (left, _) = parse! { program "1 + 2 + 2" };
+        let right = Ok(ExprKind::addition(
+            ExprKind::addition(ExprKind::integer(1), ExprKind::integer(2)),
+            ExprKind::integer(2),
         ));
 
         assert_eq!(left, right);
@@ -252,13 +298,10 @@ mod block {
 
     #[test]
     fn handles_bindings() {
-        let left = block("{ let a = 42; a }");
-        let right = Ok((
-            "",
-            ExprKind::bindings(
-                vec![Binding::new("a".to_owned(), ExprKind::integer(42))],
-                ExprKind::ident("a".to_owned()),
-            ),
+        let (left, _) = parse! { block "{ let a = 42; a }" };
+        let right = Ok(ExprKind::bindings(
+            vec![Binding::new("a".to_owned(), ExprKind::integer(42))],
+            ExprKind::ident("a".to_owned()),
         ));
 
         assert_eq!(left, right);
@@ -266,8 +309,8 @@ mod block {
 
     #[test]
     fn handles_expression() {
-        let left = block("{ 42 }");
-        let right = Ok(("", ExprKind::integer(42)));
+        let (left, _) = parse! { block "{ 42 }" };
+        let right = Ok(ExprKind::integer(42));
 
         assert_eq!(left, right);
     }
@@ -279,17 +322,14 @@ mod expr {
 
     #[test]
     fn if_addition_parses() {
-        let left = expr("if 1 { 1 } else { 1 } + 1");
-        let right = Ok((
-            "",
-            ExprKind::addition(
-                ExprKind::if_(
-                    ExprKind::integer(1),
-                    ExprKind::integer(1),
-                    ExprKind::integer(1),
-                ),
+        let (left, _) = parse! { expr "if 1 { 1 } else { 1 } + 1" };
+        let right = Ok(ExprKind::addition(
+            ExprKind::if_(
+                ExprKind::integer(1),
+                ExprKind::integer(1),
                 ExprKind::integer(1),
             ),
+            ExprKind::integer(1),
         ));
 
         assert_eq!(left, right);
@@ -301,15 +341,18 @@ mod integer {
 
     #[test]
     fn integer_simple() {
-        let left = integer("42");
-        let right = Ok(("", ExprKind::integer(42)));
+        let (left, _) = parse! { integer "42" };
+        let right = Ok(ExprKind::integer(42));
 
         assert_eq!(left, right);
     }
 
     #[test]
     fn integer_with_tail() {
-        let left = integer("101 !");
+        let ctxt = ParsingContext::new();
+        let file = LocatedSpan::new_extra("101 !", &ctxt);
+
+        let left = integer(file).map(|(tail, parsed)| (*tail.fragment(), parsed));
         let right = Ok(("!", ExprKind::integer(101)));
 
         assert_eq!(left, right);
@@ -317,22 +360,22 @@ mod integer {
 
     #[test]
     fn integer_failing_when_not_digit() {
-        assert!(integer("abc").is_err());
-        assert!(integer("").is_err());
+        assert!(parse! { integer "abc" }.0.is_err());
+        assert!(parse! { integer "" }.0.is_err());
     }
 
     #[test]
     fn integer_eats_whitespaces_before_and_after() {
-        let left = integer(" 42 ");
-        let right = Ok(("", ExprKind::integer(42)));
+        let (left, _) = parse! { integer " 42 " };
+        let right = Ok(ExprKind::integer(42));
 
         assert_eq!(left, right);
     }
 
     #[test]
     fn negative() {
-        let left = integer("-101");
-        let right = Ok(("", ExprKind::integer(-101)));
+        let (left, _) = parse! { integer "-101" };
+        let right = Ok(ExprKind::integer(-101));
 
         assert_eq!(left, right);
     }
@@ -344,15 +387,15 @@ mod add_and_sub {
 
     #[test]
     fn single_factor_fails() {
-        assert!(level_0_expression("42").is_err());
+        assert!(parse! { level_0_expression "42" }.0.is_err());
     }
 
     #[test]
     fn addition_simple() {
-        let left = level_0_expression("1+1");
-        let right = Ok((
-            "",
-            ExprKind::addition(ExprKind::integer(1), ExprKind::integer(1)),
+        let (left, _) = parse! { level_0_expression "1+1" };
+        let right = Ok(ExprKind::addition(
+            ExprKind::integer(1),
+            ExprKind::integer(1),
         ));
 
         assert_eq!(left, right);
@@ -360,23 +403,21 @@ mod add_and_sub {
 
     #[test]
     fn addition_right_associative() {
-        let left = level_0_expression("1+1+1");
-        let right = Ok((
-            "",
-            ExprKind::addition(
-                ExprKind::addition(ExprKind::integer(1), ExprKind::integer(1)),
-                ExprKind::integer(1),
-            ),
+        let (left, _) = parse! { level_0_expression "1+1+1" };
+        let right = Ok(ExprKind::addition(
+            ExprKind::addition(ExprKind::integer(1), ExprKind::integer(1)),
+            ExprKind::integer(1),
         ));
 
         assert_eq!(left, right);
     }
+
     #[test]
     fn subtraction_simple() {
-        let left = level_0_expression("43-1");
-        let right = Ok((
-            "",
-            ExprKind::subtraction(ExprKind::integer(43), ExprKind::integer(1)),
+        let (left, _) = parse! { level_0_expression "43-1" };
+        let right = Ok(ExprKind::subtraction(
+            ExprKind::integer(43),
+            ExprKind::integer(1),
         ));
 
         assert_eq!(left, right);
@@ -384,13 +425,10 @@ mod add_and_sub {
 
     #[test]
     fn subtraction_right_associative() {
-        let left = level_0_expression("44-1-1");
-        let right = Ok((
-            "",
-            ExprKind::subtraction(
-                ExprKind::subtraction(ExprKind::integer(44), ExprKind::integer(1)),
-                ExprKind::integer(1),
-            ),
+        let (left, _) = parse! { level_0_expression "44-1-1" };
+        let right = Ok(ExprKind::subtraction(
+            ExprKind::subtraction(ExprKind::integer(44), ExprKind::integer(1)),
+            ExprKind::integer(1),
         ));
 
         assert_eq!(left, right);
@@ -398,13 +436,10 @@ mod add_and_sub {
 
     #[test]
     fn addition_subtraction_mixed() {
-        let left = level_0_expression("42-1+1");
-        let right = Ok((
-            "",
-            ExprKind::addition(
-                ExprKind::subtraction(ExprKind::integer(42), ExprKind::integer(1)),
-                ExprKind::integer(1),
-            ),
+        let (left, _) = parse! { level_0_expression "42-1+1" };
+        let right = Ok(ExprKind::addition(
+            ExprKind::subtraction(ExprKind::integer(42), ExprKind::integer(1)),
+            ExprKind::integer(1),
         ));
 
         assert_eq!(left, right);
@@ -417,10 +452,10 @@ mod mul {
 
     #[test]
     fn parse_simple() {
-        let left = level_1_expression("7*6");
-        let right = Ok((
-            "",
-            ExprKind::multiplication(ExprKind::integer(7), ExprKind::integer(6)),
+        let (left, _) = parse! { level_1_expression "7*6" };
+        let right = Ok(ExprKind::multiplication(
+            ExprKind::integer(7),
+            ExprKind::integer(6),
         ));
 
         assert_eq!(left, right);
@@ -428,10 +463,10 @@ mod mul {
 
     #[test]
     fn when_spaced() {
-        let left = level_1_expression("21 * 2");
-        let right = Ok((
-            "",
-            ExprKind::multiplication(ExprKind::integer(21), ExprKind::integer(2)),
+        let (left, _) = parse! { level_1_expression "21 * 2" };
+        let right = Ok(ExprKind::multiplication(
+            ExprKind::integer(21),
+            ExprKind::integer(2),
         ));
 
         assert_eq!(left, right);
@@ -444,13 +479,10 @@ mod math {
 
     #[test]
     fn priority_simple() {
-        let left = level_0_expression("10 * 4 + 2");
-        let right = Ok((
-            "",
-            ExprKind::addition(
-                ExprKind::multiplication(ExprKind::integer(10), ExprKind::integer(4)),
-                ExprKind::integer(2),
-            ),
+        let (left, _) = parse! { level_0_expression "10 * 4 + 2" };
+        let right = Ok(ExprKind::addition(
+            ExprKind::multiplication(ExprKind::integer(10), ExprKind::integer(4)),
+            ExprKind::integer(2),
         ));
 
         assert_eq!(left, right);
@@ -463,14 +495,11 @@ mod if_else {
 
     #[test]
     fn if_else_simple() {
-        let left = if_else("if0{1}else{42}");
-        let right = Ok((
-            "",
-            ExprKind::if_(
-                ExprKind::integer(0),
-                ExprKind::integer(1),
-                ExprKind::integer(42),
-            ),
+        let (left, _) = parse! { if_else "if0{1}else{42}" };
+        let right = Ok(ExprKind::if_(
+            ExprKind::integer(0),
+            ExprKind::integer(1),
+            ExprKind::integer(42),
         ));
 
         assert_eq!(left, right);
@@ -478,14 +507,11 @@ mod if_else {
 
     #[test]
     fn if_else_spaced_braces() {
-        let left = if_else("if 0 { 1 } else { 42 }");
-        let right = Ok((
-            "",
-            ExprKind::if_(
-                ExprKind::integer(0),
-                ExprKind::integer(1),
-                ExprKind::integer(42),
-            ),
+        let (left, _) = parse! { if_else "if 0 { 1 } else { 42 }" };
+        let right = Ok(ExprKind::if_(
+            ExprKind::integer(0),
+            ExprKind::integer(1),
+            ExprKind::integer(42),
         ));
 
         assert_eq!(left, right);
@@ -493,14 +519,11 @@ mod if_else {
 
     #[test]
     fn addition_as_condition() {
-        let left = if_else("if 1 + 1 { 1 } else { 1 }");
-        let right = Ok((
-            "",
-            ExprKind::if_(
-                ExprKind::addition(ExprKind::integer(1), ExprKind::integer(1)),
-                ExprKind::integer(1),
-                ExprKind::integer(1),
-            ),
+        let (left, _) = parse! { if_else "if 1 + 1 { 1 } else { 1 }" };
+        let right = Ok(ExprKind::if_(
+            ExprKind::addition(ExprKind::integer(1), ExprKind::integer(1)),
+            ExprKind::integer(1),
+            ExprKind::integer(1),
         ));
 
         assert_eq!(left, right);
@@ -508,14 +531,15 @@ mod if_else {
 
     #[test]
     fn bindings_as_consequent_and_alternative() {
-        let left = if_else("if 1 { let a = 0; a } else { let a = 0; a }");
+        let (left, _) = parse! { if_else "if 1 { let a = 0; a } else { let a = 0; a }" };
         let inner_bindings = ExprKind::bindings(
             vec![Binding::new("a".to_owned(), ExprKind::integer(0))],
             ExprKind::ident("a".to_owned()),
         );
-        let right = Ok((
-            "",
-            ExprKind::if_(ExprKind::integer(1), inner_bindings.clone(), inner_bindings),
+        let right = Ok(ExprKind::if_(
+            ExprKind::integer(1),
+            inner_bindings.clone(),
+            inner_bindings,
         ));
 
         assert_eq!(left, right);
@@ -528,28 +552,32 @@ mod keyword {
 
     #[test]
     fn parses() {
-        let left = keyword("if")("if");
-        let right = Ok(("", ()));
+        let if_ = keyword("if");
+        let (left, _) = parse! { if_ "if" };
+        let right = Ok(());
 
         assert_eq!(left, right);
     }
 
     #[test]
     fn fails_when_followed_by_letter() {
-        assert!(keyword("if")("iff").is_err());
+        let if_ = keyword("if");
+        assert!(parse! { if_ "iff" }.0.is_err());
     }
 
     #[test]
     fn works_when_followed_by_non_letter() {
-        let left = keyword("if")("if42");
-        let right = Ok(("42", ()));
+        let if_ = keyword("if");
+        let (left, _) = parse! { if_ "if42" };
+        let right = Ok(());
 
         assert_eq!(left, right);
     }
 
     #[test]
     fn kw_followed_by_space_and_letter() {
-        assert!(keyword("let")("let a").is_ok());
+        let let_ = keyword("let");
+        assert!(parse! { let_ "let a" }.0.is_ok());
     }
 }
 
@@ -559,24 +587,21 @@ mod binding {
 
     #[test]
     fn simple() {
-        let left = binding("let a = 42;");
-        let right = Ok(("", Binding::new("a".to_owned(), ExprKind::integer(42))));
+        let (left, _) = parse! { binding "let a = 42;" };
+        let right = Ok(Binding::new("a".to_owned(), ExprKind::integer(42)));
 
         assert_eq!(left, right);
     }
 
     #[test]
     fn with_if_else() {
-        let left = binding("let foo = if 5 { 42 } else { 101 };");
-        let right = Ok((
-            "",
-            Binding::new(
-                "foo".to_owned(),
-                ExprKind::if_(
-                    ExprKind::integer(5),
-                    ExprKind::integer(42),
-                    ExprKind::integer(101),
-                ),
+        let (left, _) = parse! { binding "let foo = if 5 { 42 } else { 101 };" };
+        let right = Ok(Binding::new(
+            "foo".to_owned(),
+            ExprKind::if_(
+                ExprKind::integer(5),
+                ExprKind::integer(42),
+                ExprKind::integer(101),
             ),
         ));
 
@@ -590,14 +615,11 @@ mod bindings {
 
     #[test]
     fn bindings_simple() {
-        let left = bindings("let a = 42; a");
-        let right = Ok((
-            "",
-            ExprKind::single_binding(
-                "a".to_owned(),
-                ExprKind::integer(42),
-                ExprKind::ident("a".to_owned()),
-            ),
+        let (left, _) = parse! { bindings "let a = 42; a" };
+        let right = Ok(ExprKind::single_binding(
+            "a".to_owned(),
+            ExprKind::integer(42),
+            ExprKind::ident("a".to_owned()),
         ));
 
         assert_eq!(left, right);

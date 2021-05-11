@@ -140,8 +140,8 @@ fn bindings(input: Input) -> IResult<ExprKind> {
 }
 
 fn binding(input: Input) -> IResult<Binding> {
-    let (tail, name) = delimited(let_, ident, expect(equal, epsilon_recovery))(input)?;
-    let (tail, value) = terminated(expr, expect(semicolon, epsilon_recovery))(tail)?;
+    let (tail, name) = delimited(let_, ident, expect(equal, epsilon_recover("`=`")))(input)?;
+    let (tail, value) = terminated(expr, expect(semicolon, epsilon_recover("`;`")))(tail)?;
     Ok((tail, Binding::new(name, value)))
 }
 
@@ -235,9 +235,16 @@ where
     }
 }
 
-fn epsilon_recovery(input: Input, _: ErrorKind) -> Option<Input> {
-    input.extra.errors().add("Excepted token");
-    Some(input)
+fn epsilon_recover(token: &str) -> impl Fn(Input, ErrorKind) -> Option<Input> + '_ {
+    move |input, _| {
+        let line = input.location_line();
+        let col = input.get_utf8_column();
+
+        let message = format!("{}:{}: Excepted {}", line, col, token);
+        input.extra.errors().add(message);
+
+        Some(input)
+    }
 }
 
 fn tag<'a>(t: &'a str) -> impl FnMut(Input) -> IResult<&str> + 'a {

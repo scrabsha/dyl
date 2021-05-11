@@ -20,19 +20,16 @@ where
         .with_context(|| format!("Failed to read input file `{}`", i.as_ref().display()))?;
 
     let (ast, ctxt) = parser::parse_input(content.as_str());
-    let ast = ast.map_err(|e| {
-        ctxt.errors().emit();
-        e
-    })?;
+    ctxt.errors().emit()?;
+
+    let ast = ast?;
 
     let mut ctxt = ctxt.into_lowering_context();
 
     let instructions = lowering::lower_ast(&ast, &mut ctxt);
+    ctxt.errors().emit()?;
 
-    let instructions = instructions.map_err(|e| {
-        ctxt.errors().emit();
-        e
-    })?;
+    let instructions = instructions?;
 
     let instructions = context::resolve_context(instructions.as_slice(), &ctxt);
 
@@ -51,19 +48,16 @@ where
         .with_context(|| format!("Failed to read input file `{}`", path.as_ref().display()))?;
 
     let (ast, ctxt) = parser::parse_input(content.as_str());
-    let ast = ast.map_err(|e| {
-        ctxt.errors().emit();
-        e
-    })?;
+    ctxt.errors().emit()?;
+
+    let ast = ast?;
 
     let mut ctxt = ctxt.into_lowering_context();
 
     let instructions = lowering::lower_ast(&ast, &mut ctxt);
+    ctxt.errors().emit()?;
 
-    let instructions = instructions.map_err(|e| {
-        ctxt.errors().emit();
-        e
-    })?;
+    let instructions = instructions?;
 
     let final_instructions = context::resolve_context(instructions.as_slice(), &ctxt);
 

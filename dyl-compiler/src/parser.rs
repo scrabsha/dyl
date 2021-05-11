@@ -236,6 +236,7 @@ where
 }
 
 fn epsilon_recovery(input: Input, _: ErrorKind) -> Option<Input> {
+    input.extra.errors().add("Excepted token");
     Some(input)
 }
 

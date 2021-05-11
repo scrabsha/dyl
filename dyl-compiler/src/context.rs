@@ -1,5 +1,6 @@
 use std::{
     cell::RefCell,
+    error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
 };
 
@@ -214,8 +215,14 @@ impl ErrorContext {
         self.0.borrow_mut().push(e.into());
     }
 
-    pub(crate) fn emit(&self) {
-        eprintln!("{}", self)
+    pub(crate) fn emit(&self) -> Result<(), CompilerPassError> {
+        eprintln!("{}", self);
+
+        let errs = self.0.borrow();
+
+        errs.is_empty()
+            .then(|| ())
+            .ok_or_else(|| CompilerPassError(errs.len()))
     }
 
     #[cfg(test)]
@@ -232,6 +239,19 @@ impl Display for ErrorContext {
             .try_for_each(|e| writeln!(f, "{}", e))
     }
 }
+
+#[derive(Clone, Copy, Debug, PartialOrd, PartialEq)]
+pub(crate) struct CompilerPassError(usize);
+
+impl Display for CompilerPassError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        let error_word = if self.0 == 1 { "error" } else { "errors" };
+
+        write!(f, "Compilation failed with {} {}", self.0, error_word)
+    }
+}
+
+impl Error for CompilerPassError {}
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct CompilationError(String);
@@ -454,5 +474,26 @@ mod errors {
         let right = "Hello\nWorld\n";
 
         assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod compiler_pass_error {
+    use super::*;
+
+    #[test]
+    fn singular() {
+        assert_eq!(
+            CompilerPassError(1).to_string(),
+            "Compilation failed with 1 error"
+        );
+    }
+
+    #[test]
+    fn plural() {
+        assert_eq!(
+            CompilerPassError(2).to_string(),
+            "Compilation failed with 2 errors"
+        );
     }
 }

@@ -1,26 +1,22 @@
-use std::{
-    error::Error,
-    fmt::{self, Display, Formatter},
-};
-
 use crate::{
     ast::{Addition, Binding, Bindings, ExprKind, Ident, If, Integer, Multiplication, Subtraction},
-    context::LoweringContext,
+    context::{CompilerPassError, LoweringContext},
     instruction::Instruction,
 };
 
 pub(crate) fn lower_ast(
     ast: &ExprKind,
-    ctxt: &mut LoweringContext,
-) -> Result<Vec<Instruction>, LoweringError> {
+    mut ctxt: LoweringContext,
+) -> Result<(LoweringContext, Vec<Instruction>), CompilerPassError> {
     let mut tmp = Vec::new();
 
-    let lowering_status = ast.lower(&mut tmp, ctxt).map_err(|_| LoweringError);
+    let lowering_rslt = ast.lower(&mut tmp, &mut ctxt).map(|()| tmp);
 
-    tmp.push(Instruction::f_stop());
-    let lowering_result = lowering_status.map(|_| tmp);
-
-    lowering_result
+    ctxt.wrap_result(lowering_rslt)
+        .map(|(ctxt, mut instructions)| {
+            instructions.push(Instruction::f_stop());
+            (ctxt, instructions)
+        })
 }
 
 trait Lowerable {
@@ -28,7 +24,7 @@ trait Lowerable {
         -> LoweringResult;
 }
 
-type LoweringResult = Result<(), LoweringError>;
+type LoweringResult = Result<(), ()>;
 
 impl Lowerable for ExprKind {
     fn lower(
@@ -215,7 +211,7 @@ impl Lowerable for Ident {
 
                 ctxt.stack_mut().push_anonymous();
 
-                return Err(LoweringError);
+                return Err(());
             }
         };
 
@@ -227,17 +223,6 @@ impl Lowerable for Ident {
         Ok(())
     }
 }
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub(crate) struct LoweringError;
-
-impl Display for LoweringError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Lowering failed")
-    }
-}
-
-impl Error for LoweringError {}
 
 #[cfg(test)]
 fn lower_expr(expr: &impl Lowerable) -> (Vec<Instruction>, LoweringContext) {

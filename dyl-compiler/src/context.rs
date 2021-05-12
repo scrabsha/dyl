@@ -37,6 +37,12 @@ impl ParsingContext {
             ..Default::default()
         }
     }
+
+    pub(crate) fn wrap_result<T>(self, rslt: Result<T, ()>) -> PassResult<ParsingContext, T> {
+        self.errs
+            .emit_possible_errors(rslt)
+            .map(|pass_value| (self, pass_value))
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -69,6 +75,12 @@ impl LoweringContext {
 
     pub(crate) fn errors(&self) -> &ErrorContext {
         &self.errs
+    }
+
+    pub(crate) fn wrap_result<T>(self, res: Result<T, ()>) -> PassResult<LoweringContext, T> {
+        self.errs
+            .emit_possible_errors(res)
+            .map(|pass_value| (self, pass_value))
     }
 }
 
@@ -215,14 +227,20 @@ impl ErrorContext {
         self.0.borrow_mut().push(e.into());
     }
 
-    pub(crate) fn emit(&self) -> Result<(), CompilerPassError> {
-        eprintln!("{}", self);
-
+    fn emit_possible_errors<T>(&self, rslt: Result<T, ()>) -> Result<T, CompilerPassError> {
         let errs = self.0.borrow();
 
-        errs.is_empty()
-            .then(|| ())
-            .ok_or_else(|| CompilerPassError(errs.len()))
+        match (rslt, errs.as_slice()) {
+            (Ok(v), []) => Ok(v),
+            _ => {
+                self.emit();
+                Err(CompilerPassError(errs.len()))
+            }
+        }
+    }
+
+    fn emit(&self) {
+        eprintln!("{}", self);
     }
 
     #[cfg(test)]
@@ -280,6 +298,8 @@ pub(crate) trait Resolvable {
 
     fn resolve(&self, ctxt: &LoweringContext) -> Self::Output;
 }
+
+pub(crate) type PassResult<C, T> = Result<(C, T), CompilerPassError>;
 
 #[cfg(test)]
 mod anonymous_labels {

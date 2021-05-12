@@ -1,11 +1,10 @@
-use anyhow::{ensure, Error, Result as AnyResult};
 use nom::{
     branch::alt,
     bytes::complete::tag as nom_tag,
     character::complete::{
         alpha1 as nom_alpha1, alphanumeric1 as nom_alphanumeric1, digit1, multispace0,
     },
-    combinator::{map, opt, recognize},
+    combinator::{all_consuming, map, opt, recognize},
     error::{Error as NomError, ErrorKind, ParseError},
     multi::{fold_many1, many0, many1},
     sequence::{delimited, pair, preceded, terminated, tuple},
@@ -15,46 +14,27 @@ use nom_locate::LocatedSpan;
 
 use crate::{
     ast::{Binding, ExprKind},
-    context::ParsingContext,
+    context::{ParsingContext, PassResult},
 };
 
-pub(crate) fn parse_input(input_code: &str) -> (AnyResult<ExprKind>, ParsingContext) {
+pub(crate) fn parse_input(input_code: &str) -> PassResult<ParsingContext, ExprKind> {
     let parsing_ctxt = ParsingContext::new();
     let input = LocatedSpan::new_extra(input_code, &parsing_ctxt);
-    let parsing_status = program(input)
-        .map_err(own_nom_err)
-        .map_err(Error::new)
-        .and_then(|(tail, expr)| {
-            ensure!(
-                tail.is_empty(),
-                "Parser did not consume the whole program: {} remains",
-                tail
-            );
-            Ok(expr)
-        });
 
-    (parsing_status, parsing_ctxt)
-}
+    let parsed = program(input);
 
-fn own_nom_err(err: Err<nom::error::Error<Input>>) -> Err<nom::error::Error<()>> {
-    match err {
-        Err::Error(e) => Err::Error(own_nom_error(e)),
-        Err::Failure(f) => Err::Failure(own_nom_error(f)),
-        Err::Incomplete(needed) => Err::Incomplete(needed),
-    }
-}
-
-fn own_nom_error(err: NomError<Input>) -> NomError<()> {
-    let NomError { code, .. } = err;
-    let input = ();
-    NomError { input, code }
+    parsing_ctxt.wrap_result(parsed)
 }
 
 type Input<'a> = LocatedSpan<&'a str, &'a ParsingContext>;
 type IResult<'a, O, E = NomError<Input<'a>>> = nom::IResult<Input<'a>, O, E>;
 
-fn program(input: Input) -> IResult<ExprKind> {
-    alt((bindings, expr))(input)
+fn program(input: Input) -> Result<ExprKind, ()> {
+    program_with_tail(input).map(|(_, ast)| ast).map_err(drop)
+}
+
+fn program_with_tail(input: Input) -> IResult<ExprKind> {
+    all_consuming(alt((bindings, expr)))(input)
 }
 
 fn block(input: Input) -> IResult<ExprKind> {
@@ -280,6 +260,22 @@ fn parse_and_own<O>(
 }
 
 #[cfg(test)]
+fn own_nom_err(err: Err<nom::error::Error<Input>>) -> Err<nom::error::Error<()>> {
+    match err {
+        Err::Error(e) => Err::Error(own_nom_error(e)),
+        Err::Failure(f) => Err::Failure(own_nom_error(f)),
+        Err::Incomplete(needed) => Err::Incomplete(needed),
+    }
+}
+
+#[cfg(test)]
+fn own_nom_error(err: NomError<Input>) -> NomError<()> {
+    let NomError { code, .. } = err;
+    let input = ();
+    NomError { input, code }
+}
+
+#[cfg(test)]
 macro_rules! parse {
     ($rule:ident $slice:expr) => {{
         parse_and_own($rule, $slice)
@@ -294,7 +290,7 @@ mod program {
 
     #[test]
     fn handles_bindings() {
-        let (left, _) = parse! { program "let a = 40; let b = 2; a + b" };
+        let (left, _) = parse! { program_with_tail "let a = 40; let b = 2; a + b" };
         let right = Ok(ExprKind::bindings(
             vec![
                 Binding::new("a".to_owned(), ExprKind::integer(40)),
@@ -311,7 +307,7 @@ mod program {
 
     #[test]
     fn handles_expression() {
-        let (left, _) = parse! { program "1 + 2 + 2" };
+        let (left, _) = parse! { program_with_tail "1 + 2 + 2" };
         let right = Ok(ExprKind::addition(
             ExprKind::addition(ExprKind::integer(1), ExprKind::integer(2)),
             ExprKind::integer(2),

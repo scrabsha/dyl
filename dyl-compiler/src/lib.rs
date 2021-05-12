@@ -19,17 +19,11 @@ where
     let content = io::read_program(i.as_ref())
         .with_context(|| format!("Failed to read input file `{}`", i.as_ref().display()))?;
 
-    let (ast, ctxt) = parser::parse_input(content.as_str());
-    ctxt.errors().emit()?;
+    let (ctxt, ast) = parser::parse_input(content.as_str())?;
 
-    let ast = ast?;
+    let ctxt = ctxt.into_lowering_context();
 
-    let mut ctxt = ctxt.into_lowering_context();
-
-    let instructions = lowering::lower_ast(&ast, &mut ctxt);
-    ctxt.errors().emit()?;
-
-    let instructions = instructions?;
+    let (ctxt, instructions) = lowering::lower_ast(&ast, ctxt)?;
 
     let instructions = context::resolve_context(instructions.as_slice(), &ctxt);
 
@@ -47,17 +41,11 @@ where
     let content = io::read_program(path.as_ref())
         .with_context(|| format!("Failed to read input file `{}`", path.as_ref().display()))?;
 
-    let (ast, ctxt) = parser::parse_input(content.as_str());
-    ctxt.errors().emit()?;
+    let (ctxt, ast) = parser::parse_input(content.as_str())?;
 
-    let ast = ast?;
+    let ctxt = ctxt.into_lowering_context();
 
-    let mut ctxt = ctxt.into_lowering_context();
-
-    let instructions = lowering::lower_ast(&ast, &mut ctxt);
-    ctxt.errors().emit()?;
-
-    let instructions = instructions?;
+    let (ctxt, instructions) = lowering::lower_ast(&ast, ctxt)?;
 
     let final_instructions = context::resolve_context(instructions.as_slice(), &ctxt);
 

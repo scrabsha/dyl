@@ -8,9 +8,9 @@ use dyl_bytecode::Instruction as ResolvedInstruction;
 
 use crate::instruction::Instruction;
 
-pub(crate) fn resolve_context(
+pub(crate) fn resolve_labels(
     instructions: &[Instruction],
-    ctxt: &LoweringContext,
+    ctxt: &LabelResolutionContext,
 ) -> Vec<ResolvedInstruction> {
     instructions.iter().map(|i| i.resolve(ctxt)).collect()
 }
@@ -79,9 +79,34 @@ impl LoweringContext {
             .map(|pass_value| (self, pass_value))
     }
 
+    pub(crate) fn into_label_resolution_context(self) -> LabelResolutionContext {
+        let LoweringContext { errs, labels, .. } = self;
+        LabelResolutionContext { errs, labels }
+    }
+
     #[cfg(test)]
     pub(crate) fn new() -> LoweringContext {
         LoweringContext::default()
+    }
+}
+
+#[derive(Clone, Default, Debug, PartialEq)]
+pub(crate) struct LabelResolutionContext {
+    labels: LabelContext,
+    errs: ErrorContext,
+}
+
+impl LabelResolutionContext {
+    pub(crate) fn labels(&self) -> &LabelContext {
+        &self.labels
+    }
+
+    pub(crate) fn labels_mut(&mut self) -> &mut LabelContext {
+        &mut self.labels
+    }
+
+    pub(crate) fn errs(&self) -> &ErrorContext {
+        &self.errs
     }
 }
 
@@ -297,7 +322,7 @@ impl Display for CompilationError {
 pub(crate) trait Resolvable {
     type Output;
 
-    fn resolve(&self, ctxt: &LoweringContext) -> Self::Output;
+    fn resolve(&self, ctxt: &LabelResolutionContext) -> Self::Output;
 }
 
 pub(crate) type PassResult<C, T> = Result<(C, T), CompilerPassError>;

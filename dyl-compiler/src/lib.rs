@@ -25,7 +25,9 @@ where
 
     let (ctxt, instructions) = lowering::lower_ast(&ast, ctxt)?;
 
-    let instructions = context::resolve_context(instructions.as_slice(), &ctxt);
+    let ctxt = ctxt.into_label_resolution_context();
+
+    let instructions = context::resolve_labels(instructions.as_slice(), &ctxt);
 
     let output = Instruction::encode_multiple(&instructions);
 
@@ -47,7 +49,9 @@ where
 
     let (ctxt, instructions) = lowering::lower_ast(&ast, ctxt)?;
 
-    let final_instructions = context::resolve_context(instructions.as_slice(), &ctxt);
+    let ctxt = ctxt.into_label_resolution_context();
+
+    let final_instructions = context::resolve_labels(instructions.as_slice(), &ctxt);
 
     Ok(final_instructions)
 }

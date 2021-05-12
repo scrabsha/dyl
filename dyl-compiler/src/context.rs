@@ -53,10 +53,6 @@ pub(crate) struct LoweringContext {
 }
 
 impl LoweringContext {
-    pub(crate) fn new() -> LoweringContext {
-        LoweringContext::default()
-    }
-
     pub(crate) fn labels(&self) -> &LabelContext {
         &self.labels
     }
@@ -81,6 +77,11 @@ impl LoweringContext {
         self.errs
             .emit_possible_errors(res)
             .map(|pass_value| (self, pass_value))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new() -> LoweringContext {
+        LoweringContext::default()
     }
 }
 

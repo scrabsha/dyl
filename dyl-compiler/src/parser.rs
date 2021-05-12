@@ -227,7 +227,7 @@ fn epsilon_recover(token: &str) -> impl Fn(Input, ErrorKind) -> Option<Input> + 
     }
 }
 
-fn tag<'a>(t: &'a str) -> impl FnMut(Input) -> IResult<&str> + 'a {
+fn tag(t: &str) -> impl FnMut(Input) -> IResult<&str> + '_ {
     move |input: Input| {
         map(nom_tag(t), |matched: LocatedSpan<&str, _>| {
             *matched.fragment()

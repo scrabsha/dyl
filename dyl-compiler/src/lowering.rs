@@ -215,8 +215,7 @@ impl Lowerable for Ident {
             }
         };
 
-        // TODO: convert stack index to u16
-        collector.push(Instruction::push_copy(stack_offset as u16));
+        collector.push(Instruction::push_copy(stack_offset));
 
         ctxt.stack_mut().push_anonymous();
 

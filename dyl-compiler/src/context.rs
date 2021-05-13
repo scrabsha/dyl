@@ -81,7 +81,7 @@ impl LoweringContext {
 
     pub(crate) fn into_label_resolution_context(self) -> LabelResolutionContext {
         let LoweringContext { errs, labels, .. } = self;
-        LabelResolutionContext { errs, labels }
+        LabelResolutionContext { labels, errs }
     }
 
     #[cfg(test)]

@@ -1,5 +1,8 @@
 use crate::{
-    ast::{Addition, Binding, Bindings, ExprKind, Ident, If, Integer, Multiplication, Subtraction},
+    ast::{
+        Addition, Binding, Bindings, Bool, ExprKind, Ident, If, Integer, Multiplication,
+        Subtraction,
+    },
     context::{CompilerPassError, LoweringContext},
     instruction::Instruction,
 };
@@ -40,6 +43,7 @@ impl Lowerable for ExprKind {
             ExprKind::Multiplication(e) => e.lower(collector, ctxt),
             ExprKind::Bindings(e) => e.lower(collector, ctxt),
             ExprKind::Ident(e) => e.lower(collector, ctxt),
+            ExprKind::Bool(e) => e.lower(collector, ctxt),
         }
     }
 }
@@ -217,6 +221,21 @@ impl Lowerable for Ident {
 
         collector.push(Instruction::push_copy(stack_offset));
 
+        ctxt.stack_mut().push_anonymous();
+
+        Ok(())
+    }
+}
+
+impl Lowerable for Bool {
+    fn lower(
+        &self,
+        collector: &mut Vec<Instruction>,
+        ctxt: &mut LoweringContext,
+    ) -> LoweringResult {
+        let num = if self.value() { 1 } else { 0 };
+
+        collector.push(Instruction::push_i(num));
         ctxt.stack_mut().push_anonymous();
 
         Ok(())
@@ -537,5 +556,37 @@ mod ident {
             ctxt.errors().to_string(),
             "Undefined variable `undefined`\n"
         );
+    }
+}
+
+#[cfg(test)]
+mod bool {
+    use super::*;
+
+    fn simple_bool() -> ExprKind {
+        ExprKind::bool_(true)
+    }
+
+    fn lower_simple_bool() -> (Vec<Instruction>, LoweringContext) {
+        let mut ctxt = LoweringContext::new();
+        let mut collector = Vec::new();
+
+        simple_bool().lower(&mut collector, &mut ctxt).unwrap();
+
+        (collector, ctxt)
+    }
+
+    #[test]
+    fn generated_instructions() {
+        let (bytecode, _) = lower_simple_bool();
+        assert_eq!(bytecode, [Instruction::push_i(1)]);
+    }
+
+    #[test]
+    fn stack_effects() {
+        let (_, ctxt) = lower_simple_bool();
+
+        assert_eq!(ctxt.stack().depth(), 1);
+        assert!(ctxt.stack().top().unwrap().is_empty());
     }
 }

@@ -10,16 +10,22 @@ mod instruction;
 mod io;
 mod lowering;
 mod parser;
+mod ty;
+mod type_checker;
 
 pub fn compile<PA, PB>(i: PA, o: PB) -> Result<()>
-where
-    PA: AsRef<Path>,
-    PB: AsRef<Path>,
+    where
+        PA: AsRef<Path>,
+        PB: AsRef<Path>,
 {
     let content = io::read_program(i.as_ref())
         .with_context(|| format!("Failed to read input file `{}`", i.as_ref().display()))?;
 
     let (ctxt, ast) = parser::parse_input(content.as_str())?;
+
+    let ctxt = ctxt.into_typing_context();
+
+    let ctxt = type_checker::check_ast(&ast, ctxt)?;
 
     let ctxt = ctxt.into_lowering_context();
 
@@ -44,6 +50,10 @@ where
         .with_context(|| format!("Failed to read input file `{}`", path.as_ref().display()))?;
 
     let (ctxt, ast) = parser::parse_input(content.as_str())?;
+
+    let ctxt = ctxt.into_typing_context();
+
+    let ctxt = type_checker::check_ast(&ast, ctxt)?;
 
     let ctxt = ctxt.into_lowering_context();
 

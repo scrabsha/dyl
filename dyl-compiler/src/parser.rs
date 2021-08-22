@@ -5,10 +5,10 @@ use nom::{
         alpha1 as nom_alpha1, alphanumeric1 as nom_alphanumeric1, digit1, multispace0,
     },
     combinator::{all_consuming, map, opt, recognize},
+    Err,
     error::{Error as NomError, ErrorKind, ParseError},
     multi::{fold_many1, many0, many1},
-    sequence::{delimited, pair, preceded, terminated, tuple},
-    Err, Parser,
+    Parser, sequence::{delimited, pair, preceded, terminated, tuple},
 };
 use nom_locate::LocatedSpan;
 
@@ -126,12 +126,24 @@ fn binding(input: Input) -> IResult<Binding> {
 }
 
 fn atomic_expr(input: Input) -> IResult<ExprKind> {
-    alt((integer, if_else, block, ident_expr))(input)
+    alt((integer, if_else, block, bool_expr, ident_expr))(input)
 }
 
 fn ident_expr(input: Input) -> IResult<ExprKind> {
     let (tail, name) = ident(input)?;
     Ok((tail, ExprKind::ident(name)))
+}
+
+fn bool_expr(input: Input) -> IResult<ExprKind> {
+    alt((true_expr, false_expr))(input)
+}
+
+fn true_expr(input: Input) -> IResult<ExprKind> {
+    map(true_, |()| ExprKind::bool_(true))(input)
+}
+
+fn false_expr(input: Input) -> IResult<ExprKind> {
+    map(false_, |()| ExprKind::bool_(false))(input)
 }
 
 fn ident(input: Input) -> IResult<String> {
@@ -153,6 +165,14 @@ fn else_(input: Input) -> IResult<()> {
 
 fn let_(input: Input) -> IResult<()> {
     keyword("let")(input)
+}
+
+fn true_(input: Input) -> IResult<()> {
+    keyword("true")(input)
+}
+
+fn false_(input: Input) -> IResult<()> {
+    keyword("false")(input)
 }
 
 fn equal(input: Input) -> IResult<()> {
@@ -286,7 +306,7 @@ macro_rules! parse {
 mod program {
     use super::*;
 
-    // TODO: once we get function parsing, replace it with a set of functions
+// TODO: once we get function parsing, replace it with a set of functions
 
     #[test]
     fn handles_bindings() {
@@ -656,6 +676,27 @@ mod bindings {
             ExprKind::integer(42),
             ExprKind::ident("a".to_owned()),
         ));
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod bool_ {
+    use super::*;
+
+    #[test]
+    fn bool_true() {
+        let (left, _) = parse! { expr "true " };
+        let right = Ok(ExprKind::bool_(true));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn bool_false() {
+        let (left, _) = parse! { expr "false " };
+        let right = Ok(ExprKind::bool_(false));
 
         assert_eq!(left, right);
     }

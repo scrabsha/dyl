@@ -6,7 +6,7 @@ use std::{
 
 use dyl_bytecode::Instruction as ResolvedInstruction;
 
-use crate::instruction::Instruction;
+use crate::{instruction::Instruction, ty::Ty};
 
 pub(crate) fn resolve_labels(
     instructions: &[Instruction],
@@ -29,8 +29,52 @@ impl ParsingContext {
         &self.errs
     }
 
-    pub(crate) fn into_lowering_context(self) -> LoweringContext {
+    pub(crate) fn into_typing_context(self) -> TypingContext {
         let errs = self.errs;
+
+        TypingContext {
+            1: errs,
+            ..Default::default()
+        }
+    }
+
+    pub(crate) fn wrap_result<T>(self, rslt: Result<T, ()>) -> PassResult<ParsingContext, T> {
+        self.errs
+            .emit_possible_errors(rslt)
+            .map(|pass_value| (self, pass_value))
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct TypingContext(Vec<(String, Ty)>, ErrorContext);
+
+impl TypingContext {
+    #[cfg(test)]
+    pub(crate) fn new() -> TypingContext {
+        TypingContext::default()
+    }
+
+    pub(crate) fn add_binding(&mut self, name: String, ty: Ty) {
+        self.0.push((name, ty));
+    }
+
+    pub(crate) fn resolve_binding(&self, name: &str) -> Option<&Ty> {
+        self.0
+            .iter()
+            .rev()
+            .find_map(|(binding, ty)| binding.eq(name).then(|| ty))
+    }
+
+    pub(crate) fn new_subcontext(&self) -> usize {
+        self.0.len()
+    }
+
+    pub(crate) fn drop_subcontext(&mut self, subctxt_id: usize) {
+        self.0.truncate(subctxt_id)
+    }
+
+    pub(crate) fn into_lowering_context(self) -> LoweringContext {
+        let errs = self.1;
 
         LoweringContext {
             errs,
@@ -38,8 +82,8 @@ impl ParsingContext {
         }
     }
 
-    pub(crate) fn wrap_result<T>(self, rslt: Result<T, ()>) -> PassResult<ParsingContext, T> {
-        self.errs
+    pub(crate) fn wrap_result<T>(self, rslt: Result<T, ()>) -> PassResult<TypingContext, T> {
+        self.1
             .emit_possible_errors(rslt)
             .map(|pass_value| (self, pass_value))
     }
@@ -503,6 +547,48 @@ mod variables {
             ctxt.name_top_anonymous("bar".to_owned()),
             Err(AnonymousNamingError::NotAnonymous)
         );
+    }
+}
+
+#[cfg(test)]
+mod types {
+    use super::*;
+
+    #[test]
+    fn type_resolution_simple() {
+        let mut ctxt = TypingContext::new();
+        ctxt.add_binding("foo".to_owned(), Ty::Bool);
+
+        let ty = ctxt.resolve_binding("foo");
+
+        assert_eq!(ty, Some(&Ty::Bool));
+    }
+
+    #[test]
+    fn type_resolution_shadowing() {
+        let mut ctxt = TypingContext::new();
+        ctxt.add_binding("foo".to_owned(), Ty::Bool);
+        ctxt.add_binding("bar".to_owned(), Ty::Int);
+
+        let ty = ctxt.resolve_binding("bar");
+
+        assert_eq!(ty, Some(&Ty::Int));
+    }
+
+    #[test]
+    fn drop_subcontext_brings_old_tys() {
+        let mut ctxt = TypingContext::new();
+        ctxt.add_binding("foo".to_owned(), Ty::Bool);
+
+        let subctxt = ctxt.new_subcontext();
+
+        ctxt.add_binding("foo".to_owned(), Ty::Int);
+
+        ctxt.drop_subcontext(subctxt);
+
+        let ty = ctxt.resolve_binding("foo");
+
+        assert_eq!(ty, Some(&Ty::Bool));
     }
 }
 

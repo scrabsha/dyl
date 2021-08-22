@@ -7,6 +7,7 @@ pub(crate) enum ExprKind {
     If(If),
     Bindings(Bindings),
     Ident(Ident),
+    Bool(Bool),
 }
 
 impl ExprKind {
@@ -40,6 +41,10 @@ impl ExprKind {
 
     pub(crate) fn ident(name: String) -> ExprKind {
         ExprKind::Ident(Ident::new(name))
+    }
+
+    pub(crate) fn bool_(bool_: bool) -> ExprKind {
+        ExprKind::Bool(Bool::new(bool_))
     }
 }
 
@@ -207,5 +212,18 @@ impl Ident {
 
     pub(crate) fn name(&self) -> &str {
         self.0.as_str()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Bool(bool);
+
+impl Bool {
+    pub(crate) fn new(bool_: bool) -> Bool {
+        Bool(bool_)
+    }
+
+    pub(crate) fn value(&self) -> bool {
+        self.0
     }
 }

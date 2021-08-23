@@ -14,9 +14,9 @@ mod ty;
 mod type_checker;
 
 pub fn compile<PA, PB>(i: PA, o: PB) -> Result<()>
-    where
-        PA: AsRef<Path>,
-        PB: AsRef<Path>,
+where
+    PA: AsRef<Path>,
+    PB: AsRef<Path>,
 {
     let content = io::read_program(i.as_ref())
         .with_context(|| format!("Failed to read input file `{}`", i.as_ref().display()))?;

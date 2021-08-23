@@ -1,3 +1,5 @@
+use anyhow::{anyhow, Error as AnyError, Result as AnyResult};
+
 use crate::{
     ast::{
         Addition, Binding, Bindings, Bool, ExprKind, Ident, If, Integer, Multiplication,
@@ -11,20 +13,18 @@ pub(crate) fn check_ast(
     ast: &ExprKind,
     mut ctxt: TypingContext,
 ) -> Result<TypingContext, CompilerPassError> {
-    let input_check_rslt = ast.check_inputs(&mut ctxt);
-    let output_ty = ast
-        .get_output(&mut ctxt)
-        .and_then(|ty| ty.eq(&Ty::Int).then(|| ()).ok_or(()));
+    let children_check = ast.check_inputs(&mut ctxt);
 
-    let pass_rslt = input_check_rslt.and(output_ty);
+    let program_ty = ast.get_output(&mut ctxt).map_err(|e| ctxt.errs().add(e));
 
-    ctxt.wrap_result(pass_rslt).map(|(ctxt, ())| ctxt)
+    ctxt.wrap_result(program_ty.and(children_check))
+        .map(|(ctxt, ())| ctxt)
 }
 
 trait Typed {
     fn check_inputs(&self, ctxt: &mut TypingContext) -> Result<(), ()>;
 
-    fn get_output(&self, ctxt: &mut TypingContext) -> Result<Ty, ()>;
+    fn get_output(&self, ctxt: &mut TypingContext) -> AnyResult<Ty>;
 }
 
 impl Typed for ExprKind {
@@ -41,7 +41,7 @@ impl Typed for ExprKind {
         }
     }
 
-    fn get_output(&self, ctxt: &mut TypingContext) -> Result<Ty, ()> {
+    fn get_output(&self, ctxt: &mut TypingContext) -> AnyResult<Ty> {
         match self {
             ExprKind::Addition(addition) => addition.get_output(ctxt),
             ExprKind::Integer(integer) => integer.get_output(ctxt),
@@ -62,13 +62,21 @@ impl Typed for Addition {
             .check_inputs(ctxt)
             .and(self.right().check_inputs(ctxt));
 
-        let left_is_int = self.left().get_output(ctxt).and_then(|ty| ty.expect_int());
-        let right_is_int = self.right().get_output(ctxt).and_then(|ty| ty.expect_int());
+        let left_is_int = self
+            .left()
+            .get_output(ctxt)
+            .and_then(|ty| ty.expect_int().map_err(AnyError::new))
+            .map_err(|err| ctxt.errs().add(err));
+        let right_is_int = self
+            .right()
+            .get_output(ctxt)
+            .and_then(|ty| ty.expect_int().map_err(AnyError::new))
+            .map_err(|err| ctxt.errs().add(err));
 
         operands_are_valid.and(left_is_int).and(right_is_int)
     }
 
-    fn get_output(&self, _ctxt: &mut TypingContext) -> Result<Ty, ()> {
+    fn get_output(&self, _ctxt: &mut TypingContext) -> AnyResult<Ty> {
         Ok(Ty::Int)
     }
 }
@@ -78,7 +86,7 @@ impl Typed for Integer {
         Ok(())
     }
 
-    fn get_output(&self, _ctxt: &mut TypingContext) -> Result<Ty, ()> {
+    fn get_output(&self, _ctxt: &mut TypingContext) -> AnyResult<Ty> {
         Ok(Ty::Int)
     }
 }
@@ -94,7 +102,11 @@ impl Typed for Bindings {
 
             // Next bindings and final expression may use this binding. Let's
             // add it to the context.
-            let binding_ty = binding.value().get_output(ctxt).unwrap_or(Ty::Err);
+            let binding_ty = binding
+                .value()
+                .get_output(ctxt)
+                .map_err(|err| ctxt.errs().add(err))
+                .unwrap_or(Ty::Err);
             ctxt.add_binding(binding.name().to_owned(), binding_ty);
         });
 
@@ -104,7 +116,7 @@ impl Typed for Bindings {
         bindings_are_valid.and(final_is_valid)
     }
 
-    fn get_output(&self, ctxt: &mut TypingContext) -> Result<Ty, ()> {
+    fn get_output(&self, ctxt: &mut TypingContext) -> AnyResult<Ty> {
         let subctxt = ctxt.new_subcontext();
 
         self.defines().iter().for_each(|binding| {
@@ -126,7 +138,7 @@ impl Typed for Binding {
         self.value().check_inputs(ctxt)
     }
 
-    fn get_output(&self, ctxt: &mut TypingContext) -> Result<Ty, ()> {
+    fn get_output(&self, ctxt: &mut TypingContext) -> AnyResult<Ty> {
         self.value().get_output(ctxt)
     }
 }
@@ -136,8 +148,10 @@ impl Typed for Ident {
         ctxt.resolve_binding(self.name()).map(drop).ok_or(())
     }
 
-    fn get_output(&self, ctxt: &mut TypingContext) -> Result<Ty, ()> {
-        ctxt.resolve_binding(self.name()).cloned().ok_or(())
+    fn get_output(&self, ctxt: &mut TypingContext) -> AnyResult<Ty> {
+        ctxt.resolve_binding(self.name())
+            .cloned()
+            .ok_or_else(|| anyhow!("Variable `{}` not in scope", self.name()))
     }
 }
 
@@ -148,13 +162,21 @@ impl Typed for Multiplication {
             .check_inputs(ctxt)
             .and(self.right().check_inputs(ctxt));
 
-        let left_is_int = self.left().get_output(ctxt).and_then(|ty| ty.expect_int());
-        let right_is_int = self.right().get_output(ctxt).and_then(|ty| ty.expect_int());
+        let left_is_int = self
+            .left()
+            .get_output(ctxt)
+            .and_then(|ty| ty.expect_int().map_err(AnyError::new))
+            .map_err(|e| ctxt.errs().add(e.to_string()));
+        let right_is_int = self
+            .right()
+            .get_output(ctxt)
+            .and_then(|ty| ty.expect_int().map_err(AnyError::new))
+            .map_err(|e| ctxt.errs().add(e.to_string()));
 
         operands_are_valid.and(left_is_int).and(right_is_int)
     }
 
-    fn get_output(&self, _ctxt: &mut TypingContext) -> Result<Ty, ()> {
+    fn get_output(&self, _ctxt: &mut TypingContext) -> AnyResult<Ty> {
         Ok(Ty::Int)
     }
 }
@@ -166,13 +188,21 @@ impl Typed for Subtraction {
             .check_inputs(ctxt)
             .and(self.right().check_inputs(ctxt));
 
-        let left_is_int = self.left().get_output(ctxt).and_then(|ty| ty.expect_int());
-        let right_is_int = self.right().get_output(ctxt).and_then(|ty| ty.expect_int());
+        let left_is_int = self
+            .left()
+            .get_output(ctxt)
+            .and_then(|ty| ty.expect_int().map_err(AnyError::new))
+            .map_err(|e| ctxt.errs().add(e.to_string()));
+        let right_is_int = self
+            .right()
+            .get_output(ctxt)
+            .and_then(|ty| ty.expect_int().map_err(AnyError::new))
+            .map_err(|e| ctxt.errs().add(e.to_string()));
 
         operands_are_valid.and(left_is_int).and(right_is_int)
     }
 
-    fn get_output(&self, _ctxt: &mut TypingContext) -> Result<Ty, ()> {
+    fn get_output(&self, _ctxt: &mut TypingContext) -> AnyResult<Ty> {
         Ok(Ty::Int)
     }
 }
@@ -188,21 +218,27 @@ impl Typed for If {
         let consequent_ty = self.consequent().get_output(ctxt).unwrap_or(Ty::Err);
         let alternative_ty = self.alternative().get_output(ctxt).unwrap_or(Ty::Err);
 
-        let branches_unify = consequent_ty.unify_with(alternative_ty).map(drop);
+        let branches_unify = consequent_ty
+            .unify_with(alternative_ty)
+            .map(drop)
+            .map_err(|e| ctxt.errs().add(e.to_string()));
 
         let condition_is_bool = self
             .condition()
             .get_output(ctxt)
-            .and_then(|ty| ty.expect_bool());
+            .and_then(|ty| ty.expect_bool().map_err(AnyError::new))
+            .map_err(|e| ctxt.errs().add(e.to_string()));
 
         children_check.and(branches_unify).and(condition_is_bool)
     }
 
-    fn get_output(&self, ctxt: &mut TypingContext) -> Result<Ty, ()> {
+    fn get_output(&self, ctxt: &mut TypingContext) -> AnyResult<Ty> {
         let consequent_ty = self.consequent().get_output(ctxt).unwrap_or(Ty::Err);
         let alternative_ty = self.alternative().get_output(ctxt).unwrap_or(Ty::Err);
 
-        consequent_ty.unify_with(alternative_ty)
+        consequent_ty
+            .unify_with(alternative_ty)
+            .map_err(AnyError::new)
     }
 }
 
@@ -211,7 +247,7 @@ impl Typed for Bool {
         Ok(())
     }
 
-    fn get_output(&self, _ctxt: &mut TypingContext) -> Result<Ty, ()> {
+    fn get_output(&self, _ctxt: &mut TypingContext) -> AnyResult<Ty> {
         Ok(Ty::Bool)
     }
 }
@@ -234,7 +270,7 @@ mod addition {
         let expr = sample_addition();
         let output = expr.get_output(&mut ctxt);
 
-        assert_eq!(output, Ok(Ty::Int));
+        assert_eq!(output.unwrap(), Ty::Int);
     }
 
     #[test]
@@ -267,7 +303,7 @@ mod addition {
         ctxt.add_binding("b".to_owned(), Ty::Int);
 
         assert!(expr.check_inputs(&mut ctxt).is_ok());
-        assert_eq!(expr.get_output(&mut ctxt), Ok(Ty::Int));
+        assert_eq!(expr.get_output(&mut ctxt).unwrap(), Ty::Int);
     }
 }
 
@@ -288,7 +324,7 @@ mod integer {
     #[test]
     fn output_always_integer() {
         let mut ctxt = TypingContext::new();
-        assert_eq!(sample_integer().get_output(&mut ctxt), Ok(Ty::Int));
+        assert_eq!(sample_integer().get_output(&mut ctxt).unwrap(), Ty::Int);
     }
 }
 
@@ -380,7 +416,7 @@ mod ident {
         let mut ctxt = TypingContext::new();
         ctxt.add_binding("foo".to_owned(), Ty::Bool);
 
-        assert_eq!(sample_ident().get_output(&mut ctxt), Ok(Ty::Bool));
+        assert_eq!(sample_ident().get_output(&mut ctxt).unwrap(), Ty::Bool);
     }
 
     #[test]
@@ -404,7 +440,7 @@ mod multiplication {
         let expr = sample_multiplication();
         let output = expr.get_output(&mut ctxt);
 
-        assert_eq!(output, Ok(Ty::Int));
+        assert_eq!(output.unwrap(), Ty::Int);
     }
 
     #[test]
@@ -438,7 +474,7 @@ mod subtraction {
         let expr = sample_subtraction();
         let output = expr.get_output(&mut ctxt);
 
-        assert_eq!(output, Ok(Ty::Int));
+        assert_eq!(output.unwrap(), Ty::Int);
     }
 
     #[test]
@@ -489,7 +525,7 @@ mod if_ {
     fn get_output_ok() {
         let mut ctxt = TypingContext::new();
 
-        assert_eq!(sample_if().get_output(&mut ctxt), Ok(Ty::Int));
+        assert_eq!(sample_if().get_output(&mut ctxt).unwrap(), Ty::Int);
     }
 
     #[test]
@@ -521,6 +557,6 @@ mod bool_ {
     fn always_outputs_bool() {
         let mut ctxt = TypingContext::new();
 
-        assert_eq!(sample_bool().get_output(&mut ctxt), Ok(Ty::Bool))
+        assert_eq!(sample_bool().get_output(&mut ctxt).unwrap(), Ty::Bool);
     }
 }

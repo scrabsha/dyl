@@ -4,6 +4,8 @@ use std::{
     fmt::{Display, Formatter, Result as FmtResult},
 };
 
+use anyhow::Error as AnyError;
+
 use dyl_bytecode::Instruction as ResolvedInstruction;
 
 use crate::{instruction::Instruction, ty::Ty};
@@ -86,6 +88,10 @@ impl TypingContext {
         self.1
             .emit_possible_errors(rslt)
             .map(|pass_value| (self, pass_value))
+    }
+
+    pub(crate) fn errs(&self) -> &ErrorContext {
+        &self.1
     }
 }
 
@@ -351,9 +357,15 @@ impl From<String> for CompilationError {
 }
 
 impl From<&str> for CompilationError {
-    fn from(input: &str) -> Self {
+    fn from(input: &str) -> CompilationError {
         let input = input.to_owned();
         CompilationError::from(input)
+    }
+}
+
+impl From<AnyError> for CompilationError {
+    fn from(err: AnyError) -> CompilationError {
+        CompilationError(err.to_string())
     }
 }
 

@@ -5,19 +5,19 @@ use nom::{
         alpha1 as nom_alpha1, alphanumeric1 as nom_alphanumeric1, digit1, multispace0,
     },
     combinator::{all_consuming, map, opt, recognize},
-    Err,
     error::{Error as NomError, ErrorKind, ParseError},
     multi::{fold_many1, many0, many1},
-    Parser, sequence::{delimited, pair, preceded, terminated, tuple},
+    sequence::{delimited, pair, preceded, terminated, tuple},
+    Err, Parser,
 };
 use nom_locate::LocatedSpan;
 
 use crate::{
-    ast::{Binding, ExprKind},
+    ast::{Binding, ExprKind, Function, Program},
     context::{ParsingContext, PassResult},
 };
 
-pub(crate) fn parse_input(input_code: &str) -> PassResult<ParsingContext, ExprKind> {
+pub(crate) fn parse_input(input_code: &str) -> PassResult<ParsingContext, Program> {
     let parsing_ctxt = ParsingContext::new();
     let input = LocatedSpan::new_extra(input_code, &parsing_ctxt);
 
@@ -29,12 +29,27 @@ pub(crate) fn parse_input(input_code: &str) -> PassResult<ParsingContext, ExprKi
 type Input<'a> = LocatedSpan<&'a str, &'a ParsingContext>;
 type IResult<'a, O, E = NomError<Input<'a>>> = nom::IResult<Input<'a>, O, E>;
 
-fn program(input: Input) -> Result<ExprKind, ()> {
+fn program(input: Input) -> Result<Program, ()> {
     program_with_tail(input).map(|(_, ast)| ast).map_err(drop)
 }
 
-fn program_with_tail(input: Input) -> IResult<ExprKind> {
-    all_consuming(alt((bindings, expr)))(input)
+fn program_with_tail(input: Input) -> IResult<Program> {
+    map(all_consuming(many0(function)), Program::new)(input)
+}
+
+fn function(input: Input) -> IResult<Function> {
+    let (tail, _) = keyword("fn")(input)?;
+    let (tail, name) = ident(tail)?;
+
+    let (tail, _) = left_par(tail)?;
+
+    let (tail, _) = right_par(tail)?;
+
+    let (tail, body) = block(tail)?;
+
+    let function = Function::new(name, body);
+
+    Ok((tail, function))
 }
 
 fn block(input: Input) -> IResult<ExprKind> {
@@ -209,6 +224,14 @@ fn right_curly(input: Input) -> IResult<()> {
     map(space_insignificant(tag("}")), drop)(input)
 }
 
+fn left_par(input: Input) -> IResult<()> {
+    map(space_insignificant(tag("(")), drop)(input)
+}
+
+fn right_par(input: Input) -> IResult<()> {
+    map(space_insignificant(tag(")")), drop)(input)
+}
+
 fn space_insignificant<'a, O, E>(
     parser: impl Parser<Input<'a>, O, E>,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, O, E>
@@ -306,12 +329,34 @@ macro_rules! parse {
 mod program {
     use super::*;
 
-// TODO: once we get function parsing, replace it with a set of functions
+    #[test]
+    fn single_main_func() {
+        let (left, _) = parse! { program_with_tail "fn main() { 42 }" };
+        let right = Ok(Program::just_main(ExprKind::integer(42)));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn handles_multiple_functions() {
+        let (left, _) = parse! { program_with_tail "fn main() { 42 } fn main_() { 42 }" };
+        let right = Ok(Program::new(vec![
+            Function::main_(ExprKind::integer(42)),
+            Function::new("main_".to_string(), ExprKind::integer(42)),
+        ]));
+
+        assert_eq!(left, right);
+    }
+}
+
+#[cfg(test)]
+mod function {
+    use super::*;
 
     #[test]
     fn handles_bindings() {
-        let (left, _) = parse! { program_with_tail "let a = 40; let b = 2; a + b" };
-        let right = Ok(ExprKind::bindings(
+        let (left, _) = parse! { function "fn main() { let a = 40; let b = 2; a + b }" };
+        let right = Ok(Function::main_(ExprKind::bindings(
             vec![
                 Binding::new("a".to_owned(), ExprKind::integer(40)),
                 Binding::new("b".to_owned(), ExprKind::integer(2)),
@@ -320,18 +365,18 @@ mod program {
                 ExprKind::ident("a".to_owned()),
                 ExprKind::ident("b".to_owned()),
             ),
-        ));
+        )));
 
         assert_eq!(left, right);
     }
 
     #[test]
     fn handles_expression() {
-        let (left, _) = parse! { program_with_tail "1 + 2 + 2" };
-        let right = Ok(ExprKind::addition(
+        let (left, _) = parse! { function "fn main() { 1 + 2 + 2 }" };
+        let right = Ok(Function::main_(ExprKind::addition(
             ExprKind::addition(ExprKind::integer(1), ExprKind::integer(2)),
             ExprKind::integer(2),
-        ));
+        )));
 
         assert_eq!(left, right);
     }

@@ -1,5 +1,6 @@
 use std::{
     cell::RefCell,
+    collections::HashMap,
     error::Error,
     fmt::{Display, Formatter, Result as FmtResult},
 };
@@ -161,13 +162,17 @@ impl LabelResolutionContext {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct LabelContext(Vec<Option<u32>>);
+pub(crate) struct LabelContext(Vec<Option<u32>>, HashMap<String, u32>);
 
 impl LabelContext {
     pub(crate) fn new_anonymous(&mut self) -> u32 {
         let tmp = self.0.len();
         self.0.push(None);
         tmp as u32
+    }
+
+    pub(crate) fn new_named(&mut self, name: String, pos: u32) {
+        self.1.insert(name, pos);
     }
 
     pub(crate) fn set_position(
@@ -185,11 +190,18 @@ impl LabelContext {
         }
     }
 
-    pub(crate) fn resolve(&self, label_id: u32) -> Result<u32, LabelResolutionError> {
+    pub(crate) fn resolve_anonymous(&self, label_id: u32) -> Result<u32, LabelResolutionError> {
         self.0
             .get(label_id as usize)
             .ok_or(LabelResolutionError::UnknownLabel)?
             .ok_or(LabelResolutionError::UnknownLabelPosition)
+    }
+
+    pub(crate) fn resolve_named(&self, label: &str) -> Result<u32, LabelResolutionError> {
+        self.1
+            .get(label)
+            .ok_or(LabelResolutionError::UnknownLabel)
+            .map(Clone::clone)
     }
 
     #[cfg(test)]
@@ -431,7 +443,7 @@ mod labels {
         let a = ctxt.new_anonymous();
         ctxt.set_position(a, 42).unwrap();
 
-        assert_eq!(ctxt.resolve(a), Ok(42));
+        assert_eq!(ctxt.resolve_anonymous(a), Ok(42));
     }
 
     #[test]
@@ -440,7 +452,7 @@ mod labels {
         let a = ctxt.new_anonymous();
 
         assert_eq!(
-            ctxt.resolve(a),
+            ctxt.resolve_anonymous(a),
             Err(LabelResolutionError::UnknownLabelPosition)
         );
     }

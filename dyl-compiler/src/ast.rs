@@ -1,4 +1,58 @@
 #[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Program {
+    functions: Vec<Function>,
+}
+
+impl Program {
+    pub(crate) fn new(functions: Vec<Function>) -> Program {
+        Program { functions }
+    }
+
+    pub(crate) fn functions(&self) -> &[Function] {
+        self.functions.as_slice()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn just_main(body: ExprKind) -> Program {
+        let f = Function {
+            name: "main".to_string(),
+            body,
+        };
+        let functions = vec![f];
+
+        Program { functions }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Function {
+    name: String,
+    body: ExprKind,
+}
+
+impl Function {
+    pub(crate) fn new(name: String, body: ExprKind) -> Function {
+        Function { name, body }
+    }
+
+    pub(crate) fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    pub(crate) fn body(&self) -> &ExprKind {
+        &self.body
+    }
+
+    #[cfg(test)]
+    pub(crate) fn main_(body: ExprKind) -> Function {
+        Function {
+            name: "main".to_string(),
+            body,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum ExprKind {
     Addition(Addition),
     Subtraction(Subtraction),
@@ -169,7 +223,7 @@ impl Bindings {
     }
 
     pub(crate) fn defines(&self) -> &[Binding] {
-        &self.0.as_slice()
+        self.0.as_slice()
     }
 
     pub(crate) fn ending_expression(&self) -> &ExprKind {

@@ -1,14 +1,14 @@
 use crate::{
     ast::{
-        Addition, Binding, Bindings, Bool, ExprKind, Ident, If, Integer, Multiplication,
-        Subtraction,
+        Addition, Binding, Bindings, Bool, ExprKind, Function, Ident, If, Integer, Multiplication,
+        Program, Subtraction,
     },
     context::{CompilerPassError, LoweringContext},
     instruction::Instruction,
 };
 
 pub(crate) fn lower_ast(
-    ast: &ExprKind,
+    ast: &Program,
     mut ctxt: LoweringContext,
 ) -> Result<(LoweringContext, Vec<Instruction>), CompilerPassError> {
     let mut tmp = Vec::new();
@@ -16,10 +16,6 @@ pub(crate) fn lower_ast(
     let lowering_rslt = ast.lower(&mut tmp, &mut ctxt).map(|()| tmp);
 
     ctxt.wrap_result(lowering_rslt)
-        .map(|(ctxt, mut instructions)| {
-            instructions.push(Instruction::f_stop());
-            (ctxt, instructions)
-        })
 }
 
 trait Lowerable {
@@ -28,6 +24,85 @@ trait Lowerable {
 }
 
 type LoweringResult = Result<(), ()>;
+
+impl Lowerable for Program {
+    fn lower(
+        &self,
+        collector: &mut Vec<Instruction>,
+        ctxt: &mut LoweringContext,
+    ) -> LoweringResult {
+        let main_fn_data = self
+            .functions()
+            .iter()
+            .enumerate()
+            .find(|(_, f)| f.name() == "main");
+
+        if main_fn_data.is_none() {
+            ctxt.errors().add("No `main` function found");
+        }
+
+        // We want to lower the main function first, so that the instructions
+        // to be executed start at offset 0.
+        //
+        // In the future, we may prefer starting with a `push_i 0; call main;`
+        // directive at the beginning of the bytecode. This should be done next.
+
+        // We don't perform early return because we want to catch as much
+        // lowering errors as possible.
+        let main_fn_lowering = main_fn_data
+            .ok_or(())
+            .and_then(|(_, node)| node.lower(collector, ctxt));
+
+        if main_fn_lowering.is_ok() {
+            // We must remove the final `pop_copy` and `ret` instruction, as
+            // the main function does not return the way other functions do.
+            collector.truncate(collector.len() - 2);
+
+            // For the same reason, we must add the full stop instruction.
+            let full_stop = Instruction::f_stop();
+            collector.push(full_stop);
+        }
+
+        let idx_to_avoid = main_fn_data.map(|(idx, _)| idx);
+
+        let rslt = self
+            .functions()
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, function)| {
+                if Some(idx) != idx_to_avoid {
+                    Some(function)
+                } else {
+                    None
+                }
+            })
+            .map(|function| function.lower(collector, ctxt))
+            .fold(Ok(()), Result::and)
+            .and(main_fn_lowering);
+
+        rslt
+    }
+}
+
+impl Lowerable for Function {
+    fn lower(
+        &self,
+        collector: &mut Vec<Instruction>,
+        ctxt: &mut LoweringContext,
+    ) -> LoweringResult {
+        ctxt.labels_mut()
+            .new_named(self.name().to_string(), collector.len() as u32);
+
+        self.body().lower(collector, ctxt)?;
+
+        let rslt_copy_instr = Instruction::pop_copy(1);
+        let return_instr = Instruction::ret();
+
+        collector.extend([rslt_copy_instr, return_instr]);
+
+        Ok(())
+    }
+}
 
 impl Lowerable for ExprKind {
     fn lower(
@@ -243,11 +318,14 @@ impl Lowerable for Bool {
 }
 
 #[cfg(test)]
-fn lower_expr(expr: &impl Lowerable) -> (Vec<Instruction>, LoweringContext) {
+fn lower(expr: &impl Lowerable) -> (Vec<Instruction>, LoweringContext) {
     let mut collector = Vec::new();
     let mut ctxt = LoweringContext::new();
 
-    expr.lower(&mut collector, &mut ctxt).unwrap();
+    if expr.lower(&mut collector, &mut ctxt).is_err() {
+        println!("{}", ctxt.errors());
+        panic!("called `Result::unwrap()` on an `Err` value: ()")
+    }
 
     (collector, ctxt)
 }
@@ -263,13 +341,78 @@ fn lowering_can_fail() {
 }
 
 #[cfg(test)]
+fn simple_main_function() -> Function {
+    Function::new("main".to_string(), ExprKind::integer(42))
+}
+
+#[cfg(test)]
+mod program {
+    use super::*;
+
+    #[test]
+    fn simplest_test() {
+        let program = Program::new(vec![simple_main_function()]);
+        let (instrs, _) = lower(&program);
+
+        assert_eq!(instrs, [Instruction::push_i(42), Instruction::f_stop()]);
+    }
+
+    #[test]
+    fn main_is_lowered_first() {
+        let program = Program::new(vec![
+            Function::new("___".to_string(), ExprKind::integer(41)),
+            simple_main_function(),
+        ]);
+        let (instrs, _) = lower(&program);
+
+        assert!(instrs.starts_with(&[Instruction::push_i(42), Instruction::f_stop()]));
+    }
+
+    #[test]
+    fn main_instrs_are_removed() {
+        let program = Program::new(vec![simple_main_function()]);
+        let (instrs, _) = lower(&program);
+
+        assert!(!instrs.ends_with(&[Instruction::ret()]));
+    }
+}
+
+#[cfg(test)]
+mod function {
+    use super::*;
+
+    #[test]
+    fn body_is_lowered() {
+        let f = Function::new("foo".to_string(), ExprKind::integer(42));
+        let (instrs, _) = lower(&f);
+
+        assert_eq!(
+            instrs,
+            [
+                Instruction::push_i(42),
+                Instruction::pop_copy(1),
+                Instruction::ret()
+            ]
+        );
+    }
+
+    #[test]
+    fn label_is_added() {
+        let f = Function::new("foo".to_string(), ExprKind::integer(42));
+        let (_, ctxt) = lower(&f);
+
+        assert!(ctxt.labels().resolve_named("foo").is_ok());
+    }
+}
+
+#[cfg(test)]
 mod integer {
     use super::*;
 
     #[test]
     fn lower_42() {
         let expr = Integer::new(42);
-        let (left, _) = lower_expr(&expr);
+        let (left, _) = lower(&expr);
 
         assert_eq!(left, [Instruction::push_i(42)]);
     }
@@ -285,7 +428,7 @@ mod addition {
 
     #[test]
     fn generated_instructions() {
-        let (left, _) = lower_expr(&simple_addition());
+        let (left, _) = lower(&simple_addition());
 
         assert_eq!(
             left,
@@ -299,7 +442,7 @@ mod addition {
 
     #[test]
     fn stack_effects() {
-        let (_, ctxt) = lower_expr(&simple_addition());
+        let (_, ctxt) = lower(&simple_addition());
 
         assert_eq!(ctxt.stack().depth(), 1);
         assert!(ctxt.stack().top().unwrap().is_empty());
@@ -316,7 +459,7 @@ mod multiplication {
 
     #[test]
     fn generated_instructions() {
-        let (left, _) = lower_expr(&simple_multiplication());
+        let (left, _) = lower(&simple_multiplication());
 
         assert_eq!(
             left,
@@ -330,7 +473,7 @@ mod multiplication {
 
     #[test]
     fn stack_effects() {
-        let (_, ctxt) = lower_expr(&simple_multiplication());
+        let (_, ctxt) = lower(&simple_multiplication());
 
         assert_eq!(ctxt.stack().depth(), 1);
         assert!(ctxt.stack().top().unwrap().is_empty());
@@ -347,7 +490,7 @@ mod subtraction {
 
     #[test]
     fn generated_instructions() {
-        let (left, _) = lower_expr(&simple_subtraction());
+        let (left, _) = lower(&simple_subtraction());
 
         assert_eq!(
             left,
@@ -362,7 +505,7 @@ mod subtraction {
 
     #[test]
     fn stack_effects() {
-        let (_, ctxt) = lower_expr(&simple_subtraction());
+        let (_, ctxt) = lower(&simple_subtraction());
 
         assert_eq!(ctxt.stack().depth(), 1);
         assert!(ctxt.stack().top().unwrap().is_empty());
@@ -383,7 +526,7 @@ mod if_ {
 
     #[test]
     fn generated_instructions() {
-        let (left, _) = lower_expr(&simple_if());
+        let (left, _) = lower(&simple_if());
 
         assert_eq!(
             left,
@@ -399,16 +542,16 @@ mod if_ {
 
     #[test]
     fn label_effects() {
-        let (_, ctxt) = lower_expr(&simple_if());
+        let (_, ctxt) = lower(&simple_if());
 
-        assert_eq!(ctxt.labels().resolve(0).unwrap(), 2);
-        assert_eq!(ctxt.labels().resolve(1).unwrap(), 4);
-        assert_eq!(ctxt.labels().resolve(2).unwrap(), 5);
+        assert_eq!(ctxt.labels().resolve_anonymous(0).unwrap(), 2);
+        assert_eq!(ctxt.labels().resolve_anonymous(1).unwrap(), 4);
+        assert_eq!(ctxt.labels().resolve_anonymous(2).unwrap(), 5);
     }
 
     #[test]
     fn stack_effects() {
-        let (_, ctxt) = lower_expr(&simple_if());
+        let (_, ctxt) = lower(&simple_if());
 
         assert_eq!(ctxt.stack().depth(), 1);
         assert!(ctxt.stack().top().unwrap().is_empty());
@@ -429,7 +572,7 @@ mod bindings {
 
     #[test]
     fn generated_instructions() {
-        let (bytecode, _) = lower_expr(&simple_bindings());
+        let (bytecode, _) = lower(&simple_bindings());
 
         assert_eq!(
             bytecode,
@@ -444,7 +587,7 @@ mod bindings {
 
     #[test]
     fn stack_effects() {
-        let (_, ctxt) = lower_expr(&simple_bindings());
+        let (_, ctxt) = lower(&simple_bindings());
 
         assert_eq!(ctxt.stack().depth(), 1);
         assert!(ctxt.stack().top().unwrap().is_empty());
@@ -482,14 +625,14 @@ mod binding {
 
     #[test]
     fn generated_instructions() {
-        let (bytecode, _) = lower_expr(&simple_binding());
+        let (bytecode, _) = lower(&simple_binding());
 
         assert_eq!(bytecode, [Instruction::push_i(101)]);
     }
 
     #[test]
     fn stack_effects() {
-        let (_, ctxt) = lower_expr(&simple_binding());
+        let (_, ctxt) = lower(&simple_binding());
 
         assert_eq!(ctxt.stack().depth(), 1);
         assert_eq!(ctxt.stack().top().unwrap(), "foo");

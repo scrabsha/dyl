@@ -15,6 +15,7 @@ pub(crate) enum Instruction {
     PopCopy(PopCopy),
     Pop(Pop),
     PushCopy(PushCopy),
+    Ret(Ret),
 }
 
 macro_rules! map_instruction {
@@ -30,6 +31,7 @@ macro_rules! map_instruction {
             Instruction::PopCopy($name) => $do,
             Instruction::Pop($name) => $do,
             Instruction::PushCopy($name) => $do,
+            Instruction::Ret($name) => $do,
         }
     };
 }
@@ -46,7 +48,7 @@ macro_rules! impl_from_variants {
     };
 }
 
-impl_from_variants! { PushI, AddI, FStop, Neg, CondJmp, Goto, Mul, PopCopy, Pop, PushCopy }
+impl_from_variants! { PushI, AddI, FStop, Neg, CondJmp, Goto, Mul, PopCopy, Pop, PushCopy, Ret }
 
 impl Instruction {
     pub(crate) fn push_i(i: i32) -> Instruction {
@@ -87,6 +89,13 @@ impl Instruction {
 
     pub(crate) fn push_copy(offset: u16) -> Instruction {
         Instruction::PushCopy(PushCopy(offset))
+    }
+
+    pub(crate) fn ret() -> Instruction {
+        // Note: our current functions always return a 1-sized value. As such,
+        // we don't handle complex situations where the stack must be shrunk of
+        // a variable amount depending on the output type size.
+        Instruction::Ret(Ret)
     }
 }
 
@@ -164,17 +173,17 @@ impl Resolvable for CondJmp {
 
         let negative_addr = ctxt
             .labels()
-            .resolve(neg)
+            .resolve_anonymous(neg)
             .expect("Failed to resolve negative address value");
 
         let null_addr = ctxt
             .labels()
-            .resolve(null)
+            .resolve_anonymous(null)
             .expect("Failed to resolve null address value");
 
         let positive_addr = ctxt
             .labels()
-            .resolve(pos)
+            .resolve_anonymous(pos)
             .expect("Failed to resolve positive address value");
 
         resolved_operations::CondJmp {
@@ -194,7 +203,7 @@ impl Resolvable for Goto {
     fn resolve(&self, ctxt: &LabelResolutionContext) -> Self::Output {
         let dest = ctxt
             .labels()
-            .resolve(self.0)
+            .resolve_anonymous(self.0)
             .expect("Failed to resolve goto destination");
 
         resolved_operations::Goto(dest)
@@ -231,5 +240,19 @@ impl Resolvable for PushCopy {
 
     fn resolve(&self, _ctxt: &LabelResolutionContext) -> Self::Output {
         resolved_operations::PushCopy(self.0)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Ret;
+
+impl Resolvable for Ret {
+    type Output = resolved_operations::Ret;
+
+    fn resolve(&self, _ctxt: &LabelResolutionContext) -> Self::Output {
+        resolved_operations::Ret {
+            shrink_offset: 1,
+            ip_offset: 0,
+        }
     }
 }

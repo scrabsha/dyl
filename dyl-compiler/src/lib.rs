@@ -25,7 +25,7 @@ where
 
     let ctxt = ctxt.into_typing_context();
 
-    let ctxt = type_checker::check_ast(&ast, ctxt)?;
+    // let ctxt = type_checker::check_ast(&ast, ctxt)?;
 
     let ctxt = ctxt.into_lowering_context();
 
@@ -53,7 +53,7 @@ where
 
     let ctxt = ctxt.into_typing_context();
 
-    let ctxt = type_checker::check_ast(&ast, ctxt)?;
+    // let ctxt = type_checker::check_ast(&ast, ctxt)?;
 
     let ctxt = ctxt.into_lowering_context();
 

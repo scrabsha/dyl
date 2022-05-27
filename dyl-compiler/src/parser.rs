@@ -327,12 +327,16 @@ macro_rules! parse {
 
 #[cfg(test)]
 mod program {
+    use crate::inline_program;
+
     use super::*;
 
     #[test]
     fn single_main_func() {
         let (left, _) = parse! { program_with_tail "fn main() { 42 }" };
-        let right = Ok(Program::just_main(ExprKind::integer(42)));
+        let right = Ok(inline_program! {
+            fn main() { 42 }
+        });
 
         assert_eq!(left, right);
     }
@@ -340,10 +344,10 @@ mod program {
     #[test]
     fn handles_multiple_functions() {
         let (left, _) = parse! { program_with_tail "fn main() { 42 } fn main_() { 42 }" };
-        let right = Ok(Program::new(vec![
-            Function::main_(ExprKind::integer(42)),
-            Function::new("main_".to_string(), ExprKind::integer(42)),
-        ]));
+        let right = Ok(inline_program! {
+            fn main() { 42 }
+            fn main_() { 42 }
+        });
 
         assert_eq!(left, right);
     }
@@ -351,21 +355,20 @@ mod program {
 
 #[cfg(test)]
 mod function {
+    use crate::inline_fn;
+
     use super::*;
 
     #[test]
     fn handles_bindings() {
         let (left, _) = parse! { function "fn main() { let a = 40; let b = 2; a + b }" };
-        let right = Ok(Function::main_(ExprKind::bindings(
-            vec![
-                Binding::new("a".to_owned(), ExprKind::integer(40)),
-                Binding::new("b".to_owned(), ExprKind::integer(2)),
-            ],
-            ExprKind::addition(
-                ExprKind::ident("a".to_owned()),
-                ExprKind::ident("b".to_owned()),
-            ),
-        )));
+        let right = Ok(inline_fn! {
+            fn main() {
+                let a = 40;
+                let b = 2;
+                a + b
+            }
+        });
 
         assert_eq!(left, right);
     }
@@ -373,10 +376,11 @@ mod function {
     #[test]
     fn handles_expression() {
         let (left, _) = parse! { function "fn main() { 1 + 2 + 2 }" };
-        let right = Ok(Function::main_(ExprKind::addition(
-            ExprKind::addition(ExprKind::integer(1), ExprKind::integer(2)),
-            ExprKind::integer(2),
-        )));
+        let right = Ok(inline_fn! {
+            fn main() {
+                1 + 2 + 2
+            }
+        });
 
         assert_eq!(left, right);
     }
@@ -384,15 +388,19 @@ mod function {
 
 #[cfg(test)]
 mod block {
+    use crate::inline_expr;
+
     use super::*;
 
     #[test]
     fn handles_bindings() {
         let (left, _) = parse! { block "{ let a = 42; a }" };
-        let right = Ok(ExprKind::bindings(
-            vec![Binding::new("a".to_owned(), ExprKind::integer(42))],
-            ExprKind::ident("a".to_owned()),
-        ));
+        let right = Ok(inline_expr! {
+            {
+                let a = 42;
+                a
+            }
+        });
 
         assert_eq!(left, right);
     }
@@ -400,7 +408,11 @@ mod block {
     #[test]
     fn handles_expression() {
         let (left, _) = parse! { block "{ 42 }" };
-        let right = Ok(ExprKind::integer(42));
+        let right = Ok(inline_expr! {
+            {
+                42
+            }
+        });
 
         assert_eq!(left, right);
     }
@@ -410,29 +422,29 @@ mod block {
 mod expr {
     use super::*;
 
+    use crate::inline_expr;
+
     #[test]
     fn if_addition_parses() {
         let (left, _) = parse! { expr "if 1 { 1 } else { 1 } + 1" };
-        let right = Ok(ExprKind::addition(
-            ExprKind::if_(
-                ExprKind::integer(1),
-                ExprKind::integer(1),
-                ExprKind::integer(1),
-            ),
-            ExprKind::integer(1),
-        ));
+        let right = Ok(inline_expr! {
+            if 1 { 1 } else { 1 } + 1
+        });
 
         assert_eq!(left, right);
     }
 }
+
 #[cfg(test)]
 mod integer {
     use super::*;
 
+    use crate::inline_expr;
+
     #[test]
     fn integer_simple() {
         let (left, _) = parse! { integer "42" };
-        let right = Ok(ExprKind::integer(42));
+        let right = Ok(inline_expr! { 42 });
 
         assert_eq!(left, right);
     }
@@ -457,7 +469,7 @@ mod integer {
     #[test]
     fn integer_eats_whitespaces_before_and_after() {
         let (left, _) = parse! { integer " 42 " };
-        let right = Ok(ExprKind::integer(42));
+        let right = Ok(inline_expr! { 42 });
 
         assert_eq!(left, right);
     }
@@ -465,7 +477,7 @@ mod integer {
     #[test]
     fn negative() {
         let (left, _) = parse! { integer "-101" };
-        let right = Ok(ExprKind::integer(-101));
+        let right = Ok(inline_expr! { -101 });
 
         assert_eq!(left, right);
     }
@@ -473,6 +485,8 @@ mod integer {
 
 #[cfg(test)]
 mod add_and_sub {
+    use crate::inline_expr;
+
     use super::*;
 
     #[test]
@@ -483,10 +497,9 @@ mod add_and_sub {
     #[test]
     fn addition_simple() {
         let (left, _) = parse! { level_0_expression "1+1" };
-        let right = Ok(ExprKind::addition(
-            ExprKind::integer(1),
-            ExprKind::integer(1),
-        ));
+        let right = Ok(inline_expr! {
+            1 + 1
+        });
 
         assert_eq!(left, right);
     }
@@ -494,10 +507,7 @@ mod add_and_sub {
     #[test]
     fn addition_right_associative() {
         let (left, _) = parse! { level_0_expression "1+1+1" };
-        let right = Ok(ExprKind::addition(
-            ExprKind::addition(ExprKind::integer(1), ExprKind::integer(1)),
-            ExprKind::integer(1),
-        ));
+        let right = Ok(inline_expr! { 1 + 1 + 1 });
 
         assert_eq!(left, right);
     }
@@ -505,10 +515,9 @@ mod add_and_sub {
     #[test]
     fn subtraction_simple() {
         let (left, _) = parse! { level_0_expression "43-1" };
-        let right = Ok(ExprKind::subtraction(
-            ExprKind::integer(43),
-            ExprKind::integer(1),
-        ));
+        let right = Ok(inline_expr! {
+            43 - 1
+        });
 
         assert_eq!(left, right);
     }
@@ -516,10 +525,9 @@ mod add_and_sub {
     #[test]
     fn subtraction_right_associative() {
         let (left, _) = parse! { level_0_expression "44-1-1" };
-        let right = Ok(ExprKind::subtraction(
-            ExprKind::subtraction(ExprKind::integer(44), ExprKind::integer(1)),
-            ExprKind::integer(1),
-        ));
+        let right = Ok(inline_expr! {
+            44 - 1 - 1
+        });
 
         assert_eq!(left, right);
     }
@@ -527,10 +535,9 @@ mod add_and_sub {
     #[test]
     fn addition_subtraction_mixed() {
         let (left, _) = parse! { level_0_expression "42-1+1" };
-        let right = Ok(ExprKind::addition(
-            ExprKind::subtraction(ExprKind::integer(42), ExprKind::integer(1)),
-            ExprKind::integer(1),
-        ));
+        let right = Ok(inline_expr! {
+            42 - 1 + 1
+        });
 
         assert_eq!(left, right);
     }
@@ -538,15 +545,16 @@ mod add_and_sub {
 
 #[cfg(test)]
 mod mul {
+    use crate::inline_expr;
+
     use super::*;
 
     #[test]
     fn parse_simple() {
         let (left, _) = parse! { level_1_expression "7*6" };
-        let right = Ok(ExprKind::multiplication(
-            ExprKind::integer(7),
-            ExprKind::integer(6),
-        ));
+        let right = Ok(inline_expr! {
+            7 * 6
+        });
 
         assert_eq!(left, right);
     }
@@ -554,10 +562,9 @@ mod mul {
     #[test]
     fn when_spaced() {
         let (left, _) = parse! { level_1_expression "21 * 2" };
-        let right = Ok(ExprKind::multiplication(
-            ExprKind::integer(21),
-            ExprKind::integer(2),
-        ));
+        let right = Ok(inline_expr! {
+            21 * 2
+        });
 
         assert_eq!(left, right);
     }
@@ -565,15 +572,14 @@ mod mul {
 
 #[cfg(test)]
 mod math {
+    use crate::inline_expr;
+
     use super::*;
 
     #[test]
     fn priority_simple() {
         let (left, _) = parse! { level_0_expression "10 * 4 + 2" };
-        let right = Ok(ExprKind::addition(
-            ExprKind::multiplication(ExprKind::integer(10), ExprKind::integer(4)),
-            ExprKind::integer(2),
-        ));
+        let right = Ok(inline_expr! { 10 * 4 + 2 });
 
         assert_eq!(left, right);
     }
@@ -581,16 +587,20 @@ mod math {
 
 #[cfg(test)]
 mod if_else {
+    use crate::inline_expr;
+
     use super::*;
 
     #[test]
     fn if_else_simple() {
         let (left, _) = parse! { if_else "if0{1}else{42}" };
-        let right = Ok(ExprKind::if_(
-            ExprKind::integer(0),
-            ExprKind::integer(1),
-            ExprKind::integer(42),
-        ));
+        let right = Ok(inline_expr! {
+            if 0 {
+                1
+            } else {
+                42
+            }
+        });
 
         assert_eq!(left, right);
     }
@@ -598,11 +608,13 @@ mod if_else {
     #[test]
     fn if_else_spaced_braces() {
         let (left, _) = parse! { if_else "if 0 { 1 } else { 42 }" };
-        let right = Ok(ExprKind::if_(
-            ExprKind::integer(0),
-            ExprKind::integer(1),
-            ExprKind::integer(42),
-        ));
+        let right = Ok(inline_expr! {
+            if 0 {
+                1
+            } else {
+                42
+            }
+        });
 
         assert_eq!(left, right);
     }
@@ -610,11 +622,13 @@ mod if_else {
     #[test]
     fn addition_as_condition() {
         let (left, _) = parse! { if_else "if 1 + 1 { 1 } else { 1 }" };
-        let right = Ok(ExprKind::if_(
-            ExprKind::addition(ExprKind::integer(1), ExprKind::integer(1)),
-            ExprKind::integer(1),
-            ExprKind::integer(1),
-        ));
+        let right = Ok(inline_expr! {
+            if 1 + 1 {
+                1
+            } else {
+                1
+            }
+        });
 
         assert_eq!(left, right);
     }
@@ -622,15 +636,15 @@ mod if_else {
     #[test]
     fn bindings_as_consequent_and_alternative() {
         let (left, _) = parse! { if_else "if 1 { let a = 0; a } else { let a = 0; a }" };
-        let inner_bindings = ExprKind::bindings(
-            vec![Binding::new("a".to_owned(), ExprKind::integer(0))],
-            ExprKind::ident("a".to_owned()),
-        );
-        let right = Ok(ExprKind::if_(
-            ExprKind::integer(1),
-            inner_bindings.clone(),
-            inner_bindings,
-        ));
+        let right = Ok(inline_expr! {
+            if 1 {
+                let a = 0;
+                a
+            } else {
+                let a = 0;
+                a
+            }
+        });
 
         assert_eq!(left, right);
     }
@@ -675,6 +689,8 @@ mod keyword {
 mod binding {
     use super::*;
 
+    use crate::inline_expr;
+
     #[test]
     fn simple() {
         let (left, _) = parse! { binding "let a = 42;" };
@@ -688,11 +704,13 @@ mod binding {
         let (left, _) = parse! { binding "let foo = if 5 { 42 } else { 101 };" };
         let right = Ok(Binding::new(
             "foo".to_owned(),
-            ExprKind::if_(
-                ExprKind::integer(5),
-                ExprKind::integer(42),
-                ExprKind::integer(101),
-            ),
+            inline_expr! {
+                if 5 {
+                    42
+                } else {
+                    101
+                }
+            },
         ));
 
         assert_eq!(left, right);
@@ -711,16 +729,19 @@ mod binding {
 
 #[cfg(test)]
 mod bindings {
+    use crate::inline_expr;
+
     use super::*;
 
     #[test]
     fn bindings_simple() {
         let (left, _) = parse! { bindings "let a = 42; a" };
-        let right = Ok(ExprKind::single_binding(
-            "a".to_owned(),
-            ExprKind::integer(42),
-            ExprKind::ident("a".to_owned()),
-        ));
+        let right = Ok(inline_expr! {
+            {
+                let a = 42;
+                a
+            }
+        });
 
         assert_eq!(left, right);
     }
@@ -728,12 +749,14 @@ mod bindings {
 
 #[cfg(test)]
 mod bool_ {
+    use crate::inline_expr;
+
     use super::*;
 
     #[test]
     fn bool_true() {
         let (left, _) = parse! { expr "true " };
-        let right = Ok(ExprKind::bool_(true));
+        let right = Ok(inline_expr! { true });
 
         assert_eq!(left, right);
     }

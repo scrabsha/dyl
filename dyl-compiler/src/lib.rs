@@ -4,6 +4,9 @@ use anyhow::{Context, Result};
 
 use dyl_bytecode::Instruction;
 
+#[cfg(test)]
+mod macros;
+
 mod ast;
 mod context;
 mod instruction;

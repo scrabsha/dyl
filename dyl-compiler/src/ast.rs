@@ -11,17 +11,6 @@ impl Program {
     pub(crate) fn functions(&self) -> &[Function] {
         self.functions.as_slice()
     }
-
-    #[cfg(test)]
-    pub(crate) fn just_main(body: ExprKind) -> Program {
-        let f = Function {
-            name: "main".to_string(),
-            body,
-        };
-        let functions = vec![f];
-
-        Program { functions }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -41,14 +30,6 @@ impl Function {
 
     pub(crate) fn body(&self) -> &ExprKind {
         &self.body
-    }
-
-    #[cfg(test)]
-    pub(crate) fn main_(body: ExprKind) -> Function {
-        Function {
-            name: "main".to_string(),
-            body,
-        }
     }
 }
 

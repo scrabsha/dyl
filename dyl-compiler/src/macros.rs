@@ -45,7 +45,7 @@ macro_rules! parse_block_inner {
             bindings: vec![$(
                 (stringify!($key), parse_expr! { $( $value )* }),
             )*],
-            ending: parse_expr! { $( $tt )* },
+            ending: Box::new(parse_expr! { $( $tt )* }),
         }
     };
 }
@@ -67,7 +67,7 @@ macro_rules! parse_expr_inner {
     ) => {
         parse_expr_inner! {
             [ $( $tail )* ]
-            [ $( $parsed )* Box::new(Expr::Ident(stringify!($id)))]
+            [ $( $parsed )* Expr::Ident(stringify!($id))]
         }
     };
 
@@ -242,15 +242,13 @@ impl From<Expr> for ast::ExprKind {
     }
 }
 
-// https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=a628410cdf6e596262c565ff59561031
-
 #[cfg(test)]
 mod parse_inline {
     use super::*;
 
     #[test]
     fn parse_ident() {
-        let left: ast::ExprKind = (*parse_expr! { foo }).into();
+        let left: ast::ExprKind = parse_expr! { foo }.into();
         let right = ast::ExprKind::ident("foo".to_string());
 
         assert_eq!(left, right);
@@ -304,6 +302,23 @@ mod parse_inline {
             )],
             ast::ExprKind::ident("a".to_string()),
         );
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn body_with_integer() {
+        let left: ast::Program = parse_program! {
+            fn a() {
+                42
+            }
+        }
+        .into();
+
+        let right = ast::Program::new(vec![ast::Function::new(
+            "a".into(),
+            ast::ExprKind::integer(42),
+        )]);
 
         assert_eq!(left, right);
     }

@@ -2,12 +2,12 @@ use std::ops::{Add, Mul};
 
 use crate::ast;
 
-macro_rules! parse_block {
+macro_rules! parse_block_inner {
     (
         [ let $name:ident = $( $tt:tt )* ]
         [ $( $parsed:tt )* ]
     ) => {
-        parse_block! {
+        parse_block_inner! {
             @munching_expr [ $( $tt )* ]  [ $name ]
             [ $( $parsed )* ]
         }
@@ -17,8 +17,8 @@ macro_rules! parse_block {
         @munching_expr [ ; $( $tt:tt )* ] [ $name:ident $( $value:tt )* ]
         [ $( $parsed:tt )* ]
     ) => {
-        parse_block! {
-            [ $( $tt:tt )* ]
+        parse_block_inner! {
+            [ $( $tt )* ]
             [ $( $parsed:tt )* ($name, $( $value )* ) ]
         }
     };
@@ -27,7 +27,7 @@ macro_rules! parse_block {
         @munching_expr [ $head:tt $( $tail:tt )* ] [ $( $current:tt )* ]
         [ $( $parsed:tt )* ]
     ) => {
-        parse_block! {
+        parse_block_inner! {
             @munching_expr [ $( $tail )* ] [ $( $current )* $head ]
             [ $( $parsed )* ]
         }
@@ -43,53 +43,73 @@ macro_rules! parse_block {
     ) => {
         Expr::Block {
             bindings: vec![$(
-                (stringify!($key), parse_inline! { $( $value )* }),
+                (stringify!($key), parse_expr! { $( $value )* }),
             )*],
-            ending: parse_inline_inner! { @expr [ $( $tt )* ] [] },
+            ending: parse_expr! { $( $tt )* },
         }
     };
 }
 
-macro_rules! parse_inline_inner {
-    (
-        [
-            $(
-                fn $name:ident() { $( $body:tt )* }
-            )*
-        ]
-
-        []
-    ) => {
-        Program([
-            $(
-                Function(
-                    stringify!($name),
-                    parse_block! { [ $( $body )* ] [] },
-                ),
-            )*
-        ])
+macro_rules! parse_block {
+    ( $( $tt:tt )* ) => {
+        parse_block_inner! { [ $( $tt )* ] [] }
     };
+}
 
-    ( @expr [] [ $( $parsed:tt )* ] ) => {
+macro_rules! parse_expr_inner {
+    ( [] [ $( $parsed:tt )* ] ) => {
         $( $parsed )*
     };
 
     (
-        @expr
         [ $id:ident $( $tail:tt )* ]
         [ $( $parsed:tt )* ]
     ) => {
-        parse_inline_inner! {
-            @expr
+        parse_expr_inner! {
             [ $( $tail )* ]
-            [ $( $parsed )* Box::new(Expr::Ident(stringify!($id))) ]
+            [ $( $parsed )* Box::new(Expr::Ident(stringify!($id)))]
         }
-    }
+    };
+
+    (
+        [ $lit:literal $( $tail:tt )* ]
+        [ $( $parsed:tt )* ]
+    ) => {
+        parse_expr_inner! {
+            [ $( $tail )* ]
+            [ $( $parsed )* Expr::from($lit) ]
+        }
+    };
+
+    (
+        [ { $( $block_content:tt )* } $( $tail:tt )* ]
+        [ $( $parsed:tt )* ]
+    ) => {
+        parse_expr_inner! {
+            [ $( $tail )* ]
+            [ $( $parsed )* parse_block! { $( $block_content )* } ]
+        }
+    };
 }
 
-macro_rules! parse_inline {
+macro_rules! parse_expr {
     ( $( $tt:tt )* ) => {
-        parse_inline_inner! { [ $( $tt )* ] [] }
+        parse_expr_inner! { [ $( $tt )* ] [] }
+    };
+}
+
+macro_rules! parse_program {
+    ($(
+        fn $name:ident() { $( $body:tt )* }
+    )*) => {
+        Program([
+            $(
+                Function(
+                    stringify!($name),
+                    parse_block! { $( $body )* },
+                ),
+            )*
+        ])
     };
 }
 
@@ -228,19 +248,9 @@ impl From<Expr> for ast::ExprKind {
 mod parse_inline {
     use super::*;
 
-    macro_rules! parse_with_state {
-        ( _ $( $tt:tt )* ) => {
-            parse_inline_inner! { [ $( $tt )* ] [] }.into()
-        };
-
-        ( $rule:ident $( $tt:tt )* ) => {
-            (*parse_inline_inner! { @$rule [ $( $tt )* ] [] }).into()
-        };
-    }
-
     #[test]
     fn parse_ident() {
-        let left: ast::ExprKind = parse_with_state! { expr foo };
+        let left: ast::ExprKind = (*parse_expr! { foo }).into();
         let right = ast::ExprKind::ident("foo".to_string());
 
         assert_eq!(left, right);
@@ -248,10 +258,10 @@ mod parse_inline {
 
     #[test]
     fn parse_function() {
-        let left: ast::Program = parse_with_state! {
-            _
+        let left: ast::Program = parse_program! {
             fn main() { foo }
-        };
+        }
+        .into();
 
         let right = ast::Program::new(vec![ast::Function::new(
             "main".into(),
@@ -263,15 +273,37 @@ mod parse_inline {
 
     #[test]
     fn multiple_function() {
-        let left: ast::Program = parse_with_state! {
-            _
+        let left: ast::Program = parse_program! {
             fn a() { foo }
             fn b() { bar }
-        };
+        }
+        .into();
+
         let right = ast::Program::new(vec![
             ast::Function::new("a".to_owned(), ast::ExprKind::ident("foo".to_string())),
             ast::Function::new("b".to_owned(), ast::ExprKind::ident("bar".to_string())),
         ]);
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn blocks_in_exprs() {
+        let left: ast::ExprKind = parse_expr! {
+            {
+                let a = 42;
+                a
+            }
+        }
+        .into();
+
+        let right = ast::ExprKind::bindings(
+            vec![ast::Binding::new(
+                "a".to_string(),
+                ast::ExprKind::integer(42),
+            )],
+            ast::ExprKind::ident("a".to_string()),
+        );
 
         assert_eq!(left, right);
     }

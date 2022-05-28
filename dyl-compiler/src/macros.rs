@@ -2,6 +2,7 @@ use std::ops::{Add, Mul};
 
 use crate::ast;
 
+//////
 macro_rules! parse_block_inner {
     (
         [ let $name:ident = $( $tt:tt )* ]
@@ -56,9 +57,51 @@ macro_rules! parse_block {
     };
 }
 
+macro_rules! parse_if_inner {
+    (
+        [
+            { $( $cons:tt )* }
+            else
+            { $( $alt:tt )* }
+        ]
+        [ $( $cond:tt )* ]
+    ) => {
+        Expr::If {
+            cond: Box::new( parse_expr! { $( $cond )* } ),
+            cons: Box::new( parse_block! { $( $cons )* } ),
+            alt: Box::new( parse_block! { $( $alt )* } ),
+        }
+    };
+
+    (
+        [
+            $tok:tt $( $tail:tt )*
+        ]
+        [ $( $cond:tt )* ]
+    ) => {
+        parse_if_inner! {
+            [ $( $tail )* ]
+            [ $( $cond )* $tok ]
+        }
+    };
+}
+
+macro_rules! parse_if {
+    ( $( $tt:tt )* ) => {
+        parse_if_inner! { [ $( $tt )* ] [] }
+    };
+}
+
 macro_rules! parse_expr_inner {
     ( [] [ $( $parsed:tt )* ] ) => {
         $( $parsed )*
+    };
+
+    (
+        [ if $( $tail:tt )* ]
+        [ $( $parsed:tt )* ]
+    ) => {
+        parse_if! { $( $tail )* }
     };
 
     (
@@ -203,10 +246,6 @@ impl Expr {
             alt: Box::new(alt),
         }
     }
-
-    fn ident(id: &'static str) -> Expr {
-        Expr::Ident(id)
-    }
 }
 
 impl From<Expr> for ast::ExprKind {
@@ -319,6 +358,33 @@ mod parse_inline {
             "a".into(),
             ast::ExprKind::integer(42),
         )]);
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn if_else() {
+        let left: ast::ExprKind = parse_expr! {
+            if 1 {
+                let a = 42;
+                a
+            } else {
+                101
+            }
+        }
+        .into();
+
+        let right = ast::ExprKind::if_(
+            ast::ExprKind::integer(1),
+            ast::ExprKind::bindings(
+                vec![ast::Binding::new(
+                    "a".to_string(),
+                    ast::ExprKind::integer(42),
+                )],
+                ast::ExprKind::ident("a".to_string()),
+            ),
+            ast::ExprKind::integer(101),
+        );
 
         assert_eq!(left, right);
     }

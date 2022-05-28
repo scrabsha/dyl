@@ -20,7 +20,7 @@ macro_rules! parse_block_inner {
     ) => {
         parse_block_inner! {
             [ $( $tt )* ]
-            [ $( $parsed:tt )* ($name, $( $value )* ) ]
+            [ $( $parsed )* ($name, $( $value )* ) ]
         }
     };
 
@@ -133,6 +133,16 @@ macro_rules! parse_expr_inner {
             [ $( $parsed )* parse_block! { $( $block_content )* } ]
         }
     };
+
+    (
+        [ $tok:tt $( $tail:tt )* ]
+        [ $( $parsed:tt )* ]
+    ) => {
+        parse_expr_inner! {
+            [ $( $tail )* ]
+            [ $( $parsed )* $tok ]
+        }
+    }
 }
 
 macro_rules! parse_expr {
@@ -210,6 +220,40 @@ enum Expr {
     },
 }
 
+mod expr {
+    use super::*;
+
+    pub(super) fn addition(lhs: Expr, rhs: Expr) -> Expr {
+        let lhs = Box::new(lhs);
+        let rhs = Box::new(rhs);
+
+        Expr::Addition { lhs, rhs }
+    }
+
+    pub(super) fn block<const N: usize>(bs: [(&'static str, Expr); N], ending: Expr) -> Expr {
+        let bindings = bs.to_vec();
+        let ending = Box::new(ending);
+
+        Expr::Block { bindings, ending }
+    }
+
+    pub(super) fn ident(name: &'static str) -> Expr {
+        Expr::Ident(name)
+    }
+
+    pub(super) fn if_(cond: Expr, cons: Expr, alt: Expr) -> Expr {
+        let cond = Box::new(cond);
+        let cons = Box::new(cons);
+        let alt = Box::new(alt);
+
+        Expr::If { cond, cons, alt }
+    }
+
+    pub(super) fn integer(value: i32) -> Expr {
+        Expr::Integer(value)
+    }
+}
+
 impl From<i32> for Expr {
     fn from(i: i32) -> Expr {
         Expr::Integer(i)
@@ -284,6 +328,8 @@ impl From<Expr> for ast::ExprKind {
 #[cfg(test)]
 mod parse_inline {
     use super::*;
+
+    use super::expr::*;
 
     #[test]
     fn parse_ident() {
@@ -363,6 +409,19 @@ mod parse_inline {
     }
 
     #[test]
+    fn double_bindings() {
+        let left = parse_block! {
+            let a = 1;
+            let b = 2;
+            a
+        };
+
+        let right = block([("a", integer(1)), ("b", integer(2))], ident("a"));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
     fn if_else() {
         let left: ast::ExprKind = parse_expr! {
             if 1 {
@@ -384,6 +443,38 @@ mod parse_inline {
                 ast::ExprKind::ident("a".to_string()),
             ),
             ast::ExprKind::integer(101),
+        );
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn addition_() {
+        let left = parse_expr! { a + b };
+        let right = addition(ident("a"), ident("b"));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn cute_if_else() {
+        let left = parse_expr! {
+            if 1 {
+                let a = 42;
+                let b = 101;
+                a + b
+            } else {
+                101
+            }
+        };
+
+        let right = if_(
+            integer(1),
+            block(
+                [("a", integer(42)), ("b", integer(101))],
+                addition(ident("a"), ident("b")),
+            ),
+            block([], integer(101)),
         );
 
         assert_eq!(left, right);

@@ -1,4 +1,4 @@
-use std::ops::{Add, Mul};
+use std::ops::{Add, Mul, Neg, Sub};
 
 pub(crate) use crate::ast;
 
@@ -15,7 +15,7 @@ macro_rules! parse_block_inner {
         [ let $name:ident = $( $tt:tt )* ]
         [ $( $parsed:tt )* ]
     ) => {
-        parse_block_inner! {
+        crate::parse_block_inner! {
             @munching_expr [ $( $tt )* ]  [ $name ]
             [ $( $parsed )* ]
         }
@@ -25,7 +25,7 @@ macro_rules! parse_block_inner {
         @munching_expr [ ; $( $tt:tt )* ] [ $name:ident $( $value:tt )* ]
         [ $( $parsed:tt )* ]
     ) => {
-        parse_block_inner! {
+        crate::parse_block_inner! {
             [ $( $tt )* ]
             [ $( $parsed )* ($name, $( $value )* ) ]
         }
@@ -35,7 +35,7 @@ macro_rules! parse_block_inner {
         @munching_expr [ $head:tt $( $tail:tt )* ] [ $( $current:tt )* ]
         [ $( $parsed:tt )* ]
     ) => {
-        parse_block_inner! {
+        crate::parse_block_inner! {
             @munching_expr [ $( $tail )* ] [ $( $current )* $head ]
             [ $( $parsed )* ]
         }
@@ -51,7 +51,7 @@ macro_rules! parse_block_inner {
     ) => {
         $crate::node!(block(
             [ $( (stringify!($key), $crate::parse_expr! { $( $value )* }) ),* ],
-            parse_expr! { $( $tt )* },
+            $crate::parse_expr! { $( $tt )* },
         ))
     };
 }
@@ -124,12 +124,12 @@ macro_rules! parse_expr_inner {
     };
 
     (
-        [ $id:ident $( $tail:tt )* ]
+        [ - $( $tail:tt )* ]
         [ $( $parsed:tt )* ]
     ) => {
         $crate::parse_expr_inner! {
             [ $( $tail )* ]
-            [ $( $parsed )* $crate::node!(ident(stringify!($id)))]
+            [ $( $parsed )* -]
         }
     };
 
@@ -144,12 +144,25 @@ macro_rules! parse_expr_inner {
     };
 
     (
+        [ $id:ident $( $tail:tt )* ]
+        [ $( $parsed:tt )* ]
+    ) => {
+        $crate::parse_expr_inner! {
+            [ $( $tail )* ]
+            [ $( $parsed )* $crate::node!(ident(stringify!($id)))]
+        }
+    };
+
+
+
+
+    (
         [ { $( $block_content:tt )* } $( $tail:tt )* ]
         [ $( $parsed:tt )* ]
     ) => {
         $crate::parse_expr_inner! {
             [ $( $tail )* ]
-            [ $( $parsed )* parse_block! { $( $block_content )* } ]
+            [ $( $parsed )* $crate::parse_block! { $( $block_content )* } ]
         }
     };
 
@@ -167,13 +180,35 @@ macro_rules! parse_expr_inner {
 #[macro_export]
 macro_rules! parse_expr {
     ( $( $tt:tt )* ) => {
-        Into::into($crate::parse_expr_inner! { [ $( $tt )* ] [] })
+        $crate::parse_expr_inner! { [ $( $tt )* ] [] }
     };
 }
 
-macro_rules! parse_expr {
+#[macro_export]
+macro_rules! inline_program {
     ( $( $tt:tt )* ) => {
-        parse_expr_inner! { [ $( $tt )* ] [] }
+        Into::into($crate::parse_program! { $( $tt )* })
+    };
+}
+
+#[macro_export]
+macro_rules! inline_expr {
+    ( $( $tt:tt )* ) => {
+        Into::into($crate::parse_expr! { $( $tt )* })
+    };
+}
+
+#[macro_export]
+macro_rules! parse_fn {
+    ( fn $name:ident() { $( $body:tt )* } ) => {
+        $crate::node!(function(stringify!($name), $crate::parse_block! { $( $body )* },))
+    };
+}
+
+#[macro_export]
+macro_rules! inline_fn {
+    ( $( $tt:tt )* ) => {
+        Into::into($crate::parse_fn! { $( $tt )* })
     };
 }
 
@@ -182,12 +217,9 @@ macro_rules! parse_program {
     ($(
         fn $name:ident() { $( $body:tt )* }
     )*) => {
-        node!(program([
+        $crate::node!(program([
             $(
-                node!(function(
-                    stringify!($name),
-                    parse_block! { $( $body )* },
-                )),
+                $crate::inline_fn! { fn $name() { $( $body )* }},
             )*
         ]))
     };
@@ -221,6 +253,7 @@ impl From<Function> for ast::Function {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Expr {
+    Bool(bool),
     Ident(&'static str),
     Integer(i32),
     Addition {
@@ -239,6 +272,10 @@ pub(crate) enum Expr {
     Block {
         bindings: Vec<(&'static str, Expr)>,
         ending: Box<Expr>,
+    },
+    Subtraction {
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
     },
 }
 
@@ -289,6 +326,13 @@ pub(crate) mod nodes {
     pub(crate) fn program<const N: usize>(functions: [Function; N]) -> Program {
         Program(functions.to_vec())
     }
+
+    pub(crate) fn subtraction(lhs: Expr, rhs: Expr) -> Expr {
+        let lhs = Box::new(lhs);
+        let rhs = Box::new(rhs);
+
+        Expr::Subtraction { lhs, rhs }
+    }
 }
 
 impl From<i32> for Expr {
@@ -297,14 +341,25 @@ impl From<i32> for Expr {
     }
 }
 
+impl From<bool> for Expr {
+    fn from(b: bool) -> Expr {
+        Expr::Bool(b)
+    }
+}
+
 impl Add for Expr {
     type Output = Expr;
 
-    fn add(self, other: Expr) -> Expr {
-        Expr::Addition {
-            lhs: Box::new(self),
-            rhs: Box::new(other),
-        }
+    fn add(self, rhs: Expr) -> Expr {
+        nodes::addition(self, rhs)
+    }
+}
+
+impl Sub for Expr {
+    type Output = Expr;
+
+    fn sub(self, rhs: Self) -> Expr {
+        nodes::subtraction(self, rhs)
     }
 }
 
@@ -319,9 +374,22 @@ impl Mul for Expr {
     }
 }
 
+impl Neg for Expr {
+    type Output = Expr;
+
+    fn neg(self) -> Expr {
+        match self {
+            Expr::Integer(int) => nodes::integer(-int),
+
+            _ => panic!("`dyl` does not support negations for now"),
+        }
+    }
+}
+
 impl From<Expr> for ast::ExprKind {
     fn from(expr: Expr) -> ast::ExprKind {
         match expr {
+            Expr::Bool(b) => ast::ExprKind::bool_(b),
             Expr::Ident(name) => ast::ExprKind::ident(name.to_string()),
             Expr::Integer(value) => ast::ExprKind::integer(value),
             Expr::Addition { lhs, rhs } => {
@@ -347,6 +415,10 @@ impl From<Expr> for ast::ExprKind {
                         (*ending).into(),
                     )
                 }
+            }
+
+            Expr::Subtraction { lhs, rhs } => {
+                ast::ExprKind::subtraction((*lhs).into(), (*rhs).into())
             }
         }
     }
@@ -497,6 +569,27 @@ mod parse_inline {
             if_(integer(1), block([], integer(1)), block([], integer(1))),
             integer(1),
         );
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn integer_negation() {
+        let left = parse_expr! {
+            -42
+        };
+        let right = integer(-42);
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn subtraction_simple() {
+        let left = parse_expr! {
+            101 - 17 - 42
+        };
+
+        let right = subtraction(subtraction(integer(101), integer(17)), integer(42));
 
         assert_eq!(left, right);
     }

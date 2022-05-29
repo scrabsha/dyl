@@ -410,17 +410,14 @@ mod block {
 mod expr {
     use super::*;
 
+    use crate::parse_expr;
+
     #[test]
     fn if_addition_parses() {
         let (left, _) = parse! { expr "if 1 { 1 } else { 1 } + 1" };
-        let right = Ok(ExprKind::addition(
-            ExprKind::if_(
-                ExprKind::integer(1),
-                ExprKind::integer(1),
-                ExprKind::integer(1),
-            ),
-            ExprKind::integer(1),
-        ));
+        let right = Ok(parse_expr! {
+            if 1 { 1 } else { 1 } + 1
+        });
 
         assert_eq!(left, right);
     }

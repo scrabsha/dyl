@@ -33,3 +33,47 @@ impl From<Program> for ast::Program {
         ast::Program::new(functions)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::nodes::*;
+
+    #[test]
+    fn single_function() {
+        let left = parse_program! {
+            fn main() { foo }
+        };
+
+        let right = program([function("main", block([], ident("foo")))]);
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn multiple_functions() {
+        let left = parse_program! {
+            fn a() { foo }
+            fn b() { bar }
+        };
+
+        let right = program([
+            function("a", block([], ident("foo"))),
+            function("b", block([], ident("bar"))),
+        ]);
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn integer_as_body() {
+        let left = parse_program! {
+            fn a() {
+                42
+            }
+        };
+
+        let right = program([function("a", block([], integer(42)))]);
+
+        assert_eq!(left, right);
+    }
+}

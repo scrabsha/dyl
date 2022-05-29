@@ -29,3 +29,21 @@ impl From<Function> for ast::Function {
         ast::Function::new(name, body)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::nodes::*;
+
+    #[test]
+    fn simple_function() {
+        let left = parse_fn! {
+            fn foo() {
+                bar
+            }
+        };
+
+        let right = function("foo", block([], ident("bar")));
+
+        assert_eq!(left, right);
+    }
+}

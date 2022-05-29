@@ -1,8 +1,15 @@
 use std::ops::{Add, Mul};
 
-use crate::ast;
+pub(crate) use crate::ast;
 
-//////
+#[macro_export]
+macro_rules! node {
+    ($node_name:ident( $( $args:tt )* )) => {
+        $crate::macros::nodes::$node_name( $( $args )* )
+    };
+}
+
+#[macro_export]
 macro_rules! parse_block_inner {
     (
         [ let $name:ident = $( $tt:tt )* ]
@@ -42,34 +49,42 @@ macro_rules! parse_block_inner {
             )*
         ]
     ) => {
-        Expr::Block {
-            bindings: vec![$(
-                (stringify!($key), parse_expr! { $( $value )* }),
-            )*],
-            ending: Box::new(parse_expr! { $( $tt )* }),
-        }
+        $crate::node!(block(
+            [ $( (stringify!($key), $crate::parse_expr! { $( $value )* }) ),* ],
+            parse_expr! { $( $tt )* },
+        ))
     };
 }
 
+#[macro_export]
 macro_rules! parse_block {
     ( $( $tt:tt )* ) => {
-        parse_block_inner! { [ $( $tt )* ] [] }
+        $crate::parse_block_inner! { [ $( $tt )* ] [] }
     };
 }
 
+#[macro_export]
 macro_rules! parse_if_inner {
     (
         [
             { $( $cons:tt )* }
             else
             { $( $alt:tt )* }
+            $( $tail:tt )*
         ]
         [ $( $cond:tt )* ]
+        [ $( $parsed:tt )* ]
     ) => {
-        Expr::If {
-            cond: Box::new( parse_expr! { $( $cond )* } ),
-            cons: Box::new( parse_block! { $( $cons )* } ),
-            alt: Box::new( parse_block! { $( $alt )* } ),
+        $crate::parse_expr_inner! {
+            [ $( $tail )* ]
+            [
+                $( $parsed )*
+                $crate::node!(if_(
+                    $crate::parse_expr! { $( $cond )* },
+                    $crate::parse_block! { $( $cons )* },
+                    $crate::parse_block! { $( $alt )* },
+                ))
+            ]
         }
     };
 
@@ -78,20 +93,24 @@ macro_rules! parse_if_inner {
             $tok:tt $( $tail:tt )*
         ]
         [ $( $cond:tt )* ]
+        [ $( $parsed:tt )* ]
     ) => {
-        parse_if_inner! {
+        $crate::parse_if_inner! {
             [ $( $tail )* ]
             [ $( $cond )* $tok ]
+            [ $( $parsed )* ]
         }
     };
 }
 
+#[macro_export]
 macro_rules! parse_if {
-    ( $( $tt:tt )* ) => {
-        parse_if_inner! { [ $( $tt )* ] [] }
+    ( [ $( $tt:tt )* ] [ $( $parsed:tt )* ] ) => {
+        $crate::parse_if_inner! { [ $( $tt )* ] [] [ $( $parsed )* ] }
     };
 }
 
+#[macro_export]
 macro_rules! parse_expr_inner {
     ( [] [ $( $parsed:tt )* ] ) => {
         $( $parsed )*
@@ -101,16 +120,16 @@ macro_rules! parse_expr_inner {
         [ if $( $tail:tt )* ]
         [ $( $parsed:tt )* ]
     ) => {
-        parse_if! { $( $tail )* }
+        $crate::parse_if! { [ $( $tail )* ] [ $( $parsed )* ] }
     };
 
     (
         [ $id:ident $( $tail:tt )* ]
         [ $( $parsed:tt )* ]
     ) => {
-        parse_expr_inner! {
+        $crate::parse_expr_inner! {
             [ $( $tail )* ]
-            [ $( $parsed )* Expr::Ident(stringify!($id))]
+            [ $( $parsed )* $crate::node!(ident(stringify!($id)))]
         }
     };
 
@@ -118,9 +137,9 @@ macro_rules! parse_expr_inner {
         [ $lit:literal $( $tail:tt )* ]
         [ $( $parsed:tt )* ]
     ) => {
-        parse_expr_inner! {
+        $crate::parse_expr_inner! {
             [ $( $tail )* ]
-            [ $( $parsed )* Expr::from($lit) ]
+            [ $( $parsed )* $crate::node!(literal($lit)) ]
         }
     };
 
@@ -128,7 +147,7 @@ macro_rules! parse_expr_inner {
         [ { $( $block_content:tt )* } $( $tail:tt )* ]
         [ $( $parsed:tt )* ]
     ) => {
-        parse_expr_inner! {
+        $crate::parse_expr_inner! {
             [ $( $tail )* ]
             [ $( $parsed )* parse_block! { $( $block_content )* } ]
         }
@@ -138,11 +157,18 @@ macro_rules! parse_expr_inner {
         [ $tok:tt $( $tail:tt )* ]
         [ $( $parsed:tt )* ]
     ) => {
-        parse_expr_inner! {
+        $crate::parse_expr_inner! {
             [ $( $tail )* ]
             [ $( $parsed )* $tok ]
         }
     }
+}
+
+#[macro_export]
+macro_rules! parse_expr {
+    ( $( $tt:tt )* ) => {
+        Into::into($crate::parse_expr_inner! { [ $( $tt )* ] [] })
+    };
 }
 
 macro_rules! parse_expr {
@@ -151,31 +177,27 @@ macro_rules! parse_expr {
     };
 }
 
+#[macro_export]
 macro_rules! parse_program {
     ($(
         fn $name:ident() { $( $body:tt )* }
     )*) => {
-        Program([
+        node!(program([
             $(
-                Function(
+                node!(function(
                     stringify!($name),
                     parse_block! { $( $body )* },
-                ),
+                )),
             )*
-        ])
+        ]))
     };
 }
 
-struct Program<const N: usize>([Function; N]);
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Program(Vec<Function>);
 
-impl<const N: usize> From<[Function; N]> for Program<N> {
-    fn from(functions: [Function; N]) -> Program<N> {
-        Program(functions)
-    }
-}
-
-impl<const N: usize> From<Program<N>> for ast::Program {
-    fn from(program: Program<N>) -> ast::Program {
+impl From<Program> for ast::Program {
+    fn from(program: Program) -> ast::Program {
         let Program(functions) = program;
         let functions = functions.into_iter().map(ast::Function::from).collect();
 
@@ -184,7 +206,7 @@ impl<const N: usize> From<Program<N>> for ast::Program {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-struct Function(&'static str, Expr);
+pub(crate) struct Function(&'static str, Expr);
 
 impl From<Function> for ast::Function {
     fn from(function: Function) -> ast::Function {
@@ -198,7 +220,7 @@ impl From<Function> for ast::Function {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-enum Expr {
+pub(crate) enum Expr {
     Ident(&'static str),
     Integer(i32),
     Addition {
@@ -220,28 +242,32 @@ enum Expr {
     },
 }
 
-mod expr {
+pub(crate) mod nodes {
     use super::*;
 
-    pub(super) fn addition(lhs: Expr, rhs: Expr) -> Expr {
+    pub(crate) fn addition(lhs: Expr, rhs: Expr) -> Expr {
         let lhs = Box::new(lhs);
         let rhs = Box::new(rhs);
 
         Expr::Addition { lhs, rhs }
     }
 
-    pub(super) fn block<const N: usize>(bs: [(&'static str, Expr); N], ending: Expr) -> Expr {
+    pub(crate) fn block<const N: usize>(bs: [(&'static str, Expr); N], ending: Expr) -> Expr {
         let bindings = bs.to_vec();
         let ending = Box::new(ending);
 
         Expr::Block { bindings, ending }
     }
 
-    pub(super) fn ident(name: &'static str) -> Expr {
+    pub(crate) fn function(name: &'static str, body: Expr) -> Function {
+        Function(name, body)
+    }
+
+    pub(crate) fn ident(name: &'static str) -> Expr {
         Expr::Ident(name)
     }
 
-    pub(super) fn if_(cond: Expr, cons: Expr, alt: Expr) -> Expr {
+    pub(crate) fn if_(cond: Expr, cons: Expr, alt: Expr) -> Expr {
         let cond = Box::new(cond);
         let cons = Box::new(cons);
         let alt = Box::new(alt);
@@ -249,8 +275,19 @@ mod expr {
         Expr::If { cond, cons, alt }
     }
 
-    pub(super) fn integer(value: i32) -> Expr {
+    pub(crate) fn integer(value: i32) -> Expr {
         Expr::Integer(value)
+    }
+
+    pub(crate) fn literal<T>(lit: T) -> Expr
+    where
+        T: Into<Expr>,
+    {
+        lit.into()
+    }
+
+    pub(crate) fn program<const N: usize>(functions: [Function; N]) -> Program {
+        Program(functions.to_vec())
     }
 }
 
@@ -278,16 +315,6 @@ impl Mul for Expr {
         Expr::Multiplication {
             lhs: Box::new(self),
             rhs: Box::new(other),
-        }
-    }
-}
-
-impl Expr {
-    fn if_(cond: Expr, cons: Expr, alt: Expr) -> Expr {
-        Expr::If {
-            cond: Box::new(cond),
-            cons: Box::new(cons),
-            alt: Box::new(alt),
         }
     }
 }
@@ -329,42 +356,37 @@ impl From<Expr> for ast::ExprKind {
 mod parse_inline {
     use super::*;
 
-    use super::expr::*;
+    use nodes::*;
 
     #[test]
     fn parse_ident() {
-        let left: ast::ExprKind = parse_expr! { foo }.into();
-        let right = ast::ExprKind::ident("foo".to_string());
+        let left = parse_expr! { foo };
+        let right = ident("foo");
 
         assert_eq!(left, right);
     }
 
     #[test]
     fn parse_function() {
-        let left: ast::Program = parse_program! {
+        let left = parse_program! {
             fn main() { foo }
-        }
-        .into();
+        };
 
-        let right = ast::Program::new(vec![ast::Function::new(
-            "main".into(),
-            ast::ExprKind::ident("foo".to_string()),
-        )]);
+        let right = program([function("main", block([], ident("foo")))]);
 
         assert_eq!(left, right);
     }
 
     #[test]
     fn multiple_function() {
-        let left: ast::Program = parse_program! {
+        let left = parse_program! {
             fn a() { foo }
             fn b() { bar }
-        }
-        .into();
+        };
 
-        let right = ast::Program::new(vec![
-            ast::Function::new("a".to_owned(), ast::ExprKind::ident("foo".to_string())),
-            ast::Function::new("b".to_owned(), ast::ExprKind::ident("bar".to_string())),
+        let right = program([
+            function("a", block([], ident("foo"))),
+            function("b", block([], ident("bar"))),
         ]);
 
         assert_eq!(left, right);
@@ -372,38 +394,27 @@ mod parse_inline {
 
     #[test]
     fn blocks_in_exprs() {
-        let left: ast::ExprKind = parse_expr! {
+        let left = parse_expr! {
             {
                 let a = 42;
                 a
             }
-        }
-        .into();
+        };
 
-        let right = ast::ExprKind::bindings(
-            vec![ast::Binding::new(
-                "a".to_string(),
-                ast::ExprKind::integer(42),
-            )],
-            ast::ExprKind::ident("a".to_string()),
-        );
+        let right = block([("a", integer(42))], ident("a"));
 
         assert_eq!(left, right);
     }
 
     #[test]
     fn body_with_integer() {
-        let left: ast::Program = parse_program! {
+        let left = parse_program! {
             fn a() {
                 42
             }
-        }
-        .into();
+        };
 
-        let right = ast::Program::new(vec![ast::Function::new(
-            "a".into(),
-            ast::ExprKind::integer(42),
-        )]);
+        let right = program([function("a", block([], integer(42)))]);
 
         assert_eq!(left, right);
     }
@@ -423,26 +434,19 @@ mod parse_inline {
 
     #[test]
     fn if_else() {
-        let left: ast::ExprKind = parse_expr! {
+        let left = parse_expr! {
             if 1 {
                 let a = 42;
                 a
             } else {
                 101
             }
-        }
-        .into();
+        };
 
-        let right = ast::ExprKind::if_(
-            ast::ExprKind::integer(1),
-            ast::ExprKind::bindings(
-                vec![ast::Binding::new(
-                    "a".to_string(),
-                    ast::ExprKind::integer(42),
-                )],
-                ast::ExprKind::ident("a".to_string()),
-            ),
-            ast::ExprKind::integer(101),
+        let right = if_(
+            integer(1),
+            block([("a", integer(42))], ident("a")),
+            block([], integer(101)),
         );
 
         assert_eq!(left, right);
@@ -451,6 +455,7 @@ mod parse_inline {
     #[test]
     fn addition_() {
         let left = parse_expr! { a + b };
+
         let right = addition(ident("a"), ident("b"));
 
         assert_eq!(left, right);
@@ -468,6 +473,8 @@ mod parse_inline {
             }
         };
 
+        use nodes::*;
+
         let right = if_(
             integer(1),
             block(
@@ -475,6 +482,20 @@ mod parse_inline {
                 addition(ident("a"), ident("b")),
             ),
             block([], integer(101)),
+        );
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn addition_as_part_of_if() {
+        let left = parse_expr! {
+            if 1 { 1 } else { 1 } + 1
+        };
+
+        let right = addition(
+            if_(integer(1), block([], integer(1)), block([], integer(1))),
+            integer(1),
         );
 
         assert_eq!(left, right);

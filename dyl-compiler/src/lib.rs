@@ -4,12 +4,13 @@ use anyhow::{Context, Result};
 
 use dyl_bytecode::Instruction;
 
+mod macros;
+
 mod ast;
 mod context;
 mod instruction;
 mod io;
 mod lowering;
-mod macros;
 mod parser;
 mod ty;
 mod type_checker;

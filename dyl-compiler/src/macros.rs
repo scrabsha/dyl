@@ -7,7 +7,7 @@
 //!
 //! The next few sentences shall explain,
 //! What's complex, cursed, or damn simple,
-//! So you don't feel lost and get less pain
+//! So you don't feel lost and get less pain,
 //! Once you start diving in this `impl`.
 //!
 //! You'll see some simple conventions there,

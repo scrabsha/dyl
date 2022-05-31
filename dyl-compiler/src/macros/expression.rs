@@ -26,9 +26,9 @@ macro_rules! parse_expr_inner {
 
     (
         [ if $( $tail:tt )* ]
-        [ $( $parsed:tt )* ]
+        $parsed:tt
     ) => {
-        $crate::parse_if! { [ $( $tail )* ] [ $( $parsed )* ] }
+        $crate::parse_if! { [ $( $tail )* ] $parsed }
     };
 
     (
@@ -93,11 +93,11 @@ macro_rules! parse_block {
 macro_rules! parse_block_inner {
     (
         [ let $name:ident = $( $tt:tt )* ]
-        [ $( $parsed:tt )* ]
+        $parsed:tt
     ) => {
         crate::parse_block_inner! {
             @munching_expr [ $( $tt )* ]  [ $name ]
-            [ $( $parsed )* ]
+            $parsed
         }
     };
 
@@ -113,11 +113,11 @@ macro_rules! parse_block_inner {
 
     (
         @munching_expr [ $head:tt $( $tail:tt )* ] [ $( $current:tt )* ]
-        [ $( $parsed:tt )* ]
+        $parsed:tt
     ) => {
         crate::parse_block_inner! {
             @munching_expr [ $( $tail )* ] [ $( $current )* $head ]
-            [ $( $parsed )* ]
+            $parsed
         }
     };
 
@@ -138,8 +138,8 @@ macro_rules! parse_block_inner {
 
 #[macro_export]
 macro_rules! parse_if {
-    ( [ $( $tt:tt )* ] [ $( $parsed:tt )* ] ) => {
-        $crate::parse_if_inner! { [ $( $tt )* ] [] [ $( $parsed )* ] }
+    ( [ $( $tt:tt )* ] $parsed:tt ) => {
+        $crate::parse_if_inner! { [ $( $tt )* ] [] $parsed }
     };
 }
 
@@ -173,12 +173,12 @@ macro_rules! parse_if_inner {
             $tok:tt $( $tail:tt )*
         ]
         [ $( $cond:tt )* ]
-        [ $( $parsed:tt )* ]
+        $parsed:tt
     ) => {
         $crate::parse_if_inner! {
             [ $( $tail )* ]
             [ $( $cond )* $tok ]
-            [ $( $parsed )* ]
+            $parsed
         }
     };
 }

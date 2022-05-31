@@ -12,11 +12,11 @@ macro_rules! inline_program {
 #[macro_export]
 macro_rules! parse_program {
     ($(
-        fn $name:ident() { $( $body:tt )* }
+        fn $name:ident() $body:tt
     )*) => {
         $crate::node!(program([
             $(
-                $crate::inline_fn! { fn $name() { $( $body )* }},
+                $crate::inline_fn! { fn $name() $body },
             )*
         ]))
     };

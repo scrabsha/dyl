@@ -11,8 +11,8 @@ macro_rules! inline_fn {
 
 #[macro_export]
 macro_rules! parse_fn {
-    ( fn $name:ident() { $( $body:tt )* } ) => {
-        $crate::node!(function(stringify!($name), $crate::parse_block! { $( $body )* },))
+    ( fn $name:ident() $body:tt  ) => {
+        $crate::node!(function(stringify!($name), $crate::parse_expr! { $body },))
     };
 }
 

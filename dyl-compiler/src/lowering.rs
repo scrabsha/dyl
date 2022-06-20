@@ -341,17 +341,14 @@ fn lowering_can_fail() {
 }
 
 #[cfg(test)]
-fn simple_main_function() -> Function {
-    Function::new("main".to_string(), ExprKind::integer(42))
-}
-
-#[cfg(test)]
 mod program {
+    use crate::inline_program;
+
     use super::*;
 
     #[test]
     fn simplest_test() {
-        let program = Program::new(vec![simple_main_function()]);
+        let program: Program = inline_program! { fn main() { 42 } };
         let (instrs, _) = lower(&program);
 
         assert_eq!(instrs, [Instruction::push_i(42), Instruction::f_stop()]);
@@ -359,10 +356,11 @@ mod program {
 
     #[test]
     fn main_is_lowered_first() {
-        let program = Program::new(vec![
-            Function::new("___".to_string(), ExprKind::integer(41)),
-            simple_main_function(),
-        ]);
+        let program: Program = inline_program! {
+            fn ___() { 41 }
+            fn main() { 42 }
+        };
+
         let (instrs, _) = lower(&program);
 
         assert!(instrs.starts_with(&[Instruction::push_i(42), Instruction::f_stop()]));
@@ -370,7 +368,7 @@ mod program {
 
     #[test]
     fn main_instrs_are_removed() {
-        let program = Program::new(vec![simple_main_function()]);
+        let program: Program = inline_program! { fn main() { 42 } };
         let (instrs, _) = lower(&program);
 
         assert!(!instrs.ends_with(&[Instruction::ret()]));
@@ -379,11 +377,13 @@ mod program {
 
 #[cfg(test)]
 mod function {
+    use crate::inline_fn;
+
     use super::*;
 
     #[test]
     fn body_is_lowered() {
-        let f = Function::new("foo".to_string(), ExprKind::integer(42));
+        let f: Function = inline_fn! { fn f() { 42 } };
         let (instrs, _) = lower(&f);
 
         assert_eq!(
@@ -398,7 +398,7 @@ mod function {
 
     #[test]
     fn label_is_added() {
-        let f = Function::new("foo".to_string(), ExprKind::integer(42));
+        let f: Function = inline_fn! { fn foo() { 42 } };
         let (_, ctxt) = lower(&f);
 
         assert!(ctxt.labels().resolve_named("foo").is_ok());
@@ -407,11 +407,13 @@ mod function {
 
 #[cfg(test)]
 mod integer {
+    use crate::inline_expr;
+
     use super::*;
 
     #[test]
     fn lower_42() {
-        let expr = Integer::new(42);
+        let expr: ExprKind = inline_expr! { 42 };
         let (left, _) = lower(&expr);
 
         assert_eq!(left, [Instruction::push_i(42)]);
@@ -482,10 +484,12 @@ mod multiplication {
 
 #[cfg(test)]
 mod subtraction {
+    use crate::inline_expr;
+
     use super::*;
 
     fn simple_subtraction() -> ExprKind {
-        ExprKind::subtraction(ExprKind::integer(43), ExprKind::integer(1))
+        inline_expr! { 43 - 1 }
     }
 
     #[test]
@@ -514,14 +518,12 @@ mod subtraction {
 
 #[cfg(test)]
 mod if_ {
+    use crate::inline_expr;
+
     use super::*;
 
     fn simple_if() -> ExprKind {
-        ExprKind::if_(
-            ExprKind::integer(1),
-            ExprKind::integer(42),
-            ExprKind::integer(-1),
-        )
+        inline_expr! { if 1 { 42 } else { -1 } }
     }
 
     #[test]
@@ -560,14 +562,17 @@ mod if_ {
 
 #[cfg(test)]
 mod bindings {
+    use crate::inline_expr;
+
     use super::*;
 
     fn simple_bindings() -> ExprKind {
-        ExprKind::single_binding(
-            "foo".to_owned(),
-            ExprKind::integer(101),
-            ExprKind::integer(42),
-        )
+        inline_expr! {
+            {
+                let foo = 101;
+                42
+            }
+        }
     }
 
     #[test]
@@ -595,13 +600,13 @@ mod bindings {
 
     #[test]
     fn recovers_from_error() {
-        let expr = ExprKind::bindings(
-            vec![
-                Binding::new("a".to_owned(), ExprKind::ident("b".to_owned())),
-                Binding::new("c".to_owned(), ExprKind::ident("d".to_owned())),
-            ],
-            ExprKind::ident("e".to_owned()),
-        );
+        let expr: ExprKind = inline_expr! {
+            {
+                let a = b;
+                let c = d;
+                e
+            }
+        };
         let mut ctxt = LoweringContext::new();
         let mut instructions = Vec::new();
 
@@ -641,10 +646,12 @@ mod binding {
 
 #[cfg(test)]
 mod ident {
+    use crate::inline_expr;
+
     use super::*;
 
     fn simple_ident() -> ExprKind {
-        ExprKind::ident("foo".to_owned())
+        inline_expr! { foo }
     }
 
     fn lower_simple_ident() -> (Vec<Instruction>, LoweringContext) {
@@ -676,7 +683,7 @@ mod ident {
 
     #[test]
     fn fails_when_not_found() {
-        let exp = ExprKind::ident("foo".to_owned());
+        let exp: ExprKind = inline_expr! { foo };
         let mut ctxt = LoweringContext::new();
         let mut instructions = Vec::new();
 
@@ -688,11 +695,11 @@ mod ident {
 
     #[test]
     fn emits_when_not_found() {
-        let exp = ExprKind::ident("undefined".to_owned());
+        let expr: ExprKind = inline_expr! { undefined };
         let mut ctxt = LoweringContext::new();
         let mut instructions = Vec::new();
 
-        let rslt = exp.lower(&mut instructions, &mut ctxt);
+        let rslt = expr.lower(&mut instructions, &mut ctxt);
 
         assert!(rslt.is_err());
         assert_eq!(
@@ -704,10 +711,12 @@ mod ident {
 
 #[cfg(test)]
 mod bool {
+    use crate::inline_expr;
+
     use super::*;
 
     fn simple_bool() -> ExprKind {
-        ExprKind::bool_(true)
+        inline_expr! { true }
     }
 
     fn lower_simple_bool() -> (Vec<Instruction>, LoweringContext) {
